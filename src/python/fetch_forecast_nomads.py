@@ -3,7 +3,7 @@
 fetch_forecast_nomads.py — Real-time 168-hour weather forecast via NOAA NOMADS
 
 Fetches a 168-hour (7-day) GFS weather forecast for any [lat, lon] coordinate
-directly from NOAA's public NOMADS server. No account or token needed.
+directly from NOAA's public NOMADS server.
 
 Uses wgrib2 to extract values at the exact lat/lon from GRIB2 files.
 Saves results to SQLite using the existing repo database schema.
@@ -27,7 +27,7 @@ from typing import Optional, Tuple, List
 
 import requests
 
-# ── Path setup ────────────────────────────────────────────────────────────────
+# Path setup
 SRC_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SRC_DIR))
 
@@ -37,8 +37,7 @@ except ImportError:
     print("ERROR: coordinate_utils.py not found. Run from inside src/python/")
     sys.exit(1)
 
-# ── Constants ─────────────────────────────────────────────────────────────────
-
+# Constants
 # GFS forecast hours: every 6h up to 168h (7 days)
 FORECAST_HOURS = list(range(0, 174, 6))   # [0, 6, 12, ..., 168]
 
@@ -54,7 +53,7 @@ DEFAULT_DOWNLOAD_DIR = str(SRC_DIR / "downloaded_files" / "forecasts")
 GRIB2_TEMP_DIR       = str(SRC_DIR / "data" / "grib2_temp")
 
 
-# ── Logging ───────────────────────────────────────────────────────────────────
+# Logging 
 
 def setup_logging() -> logging.Logger:
     logs_dir = SRC_DIR / "logs"
@@ -72,8 +71,7 @@ def setup_logging() -> logging.Logger:
 logger = setup_logging()
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
+# Helpers
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -92,7 +90,6 @@ def get_latest_gfs_cycle() -> Tuple[str, str]:
     if (now.hour - cycle_hour) < 4:
         cycle_hour -= 6
     cycle_hour = cycle_hour % 24
-    # If we backed off past midnight, use yesterday's date
     if cycle_hour < 0:
         cycle_hour += 24
         now = now - timedelta(days=1)
@@ -126,7 +123,6 @@ def download_grib2(url: str, filepath: str, retries: int = 3) -> bool:
         try:
             resp = requests.get(url, timeout=60)
             resp.raise_for_status()
-            # NOMADS returns an HTML error page for missing files
             if b"<html" in resp.content[:200].lower():
                 logger.warning(f"    Got HTML page — file not ready yet.")
                 return False
@@ -152,7 +148,7 @@ def extract_value_with_wgrib2(filepath: str, lat: float, lon: float) -> Optional
 
     GFS uses 0-360 longitude (not -180 to 180), so we convert.
     """
-    lon_gfs = lon % 360  # convert -122.26 → 237.74
+    lon_gfs = lon % 360  # convert -122.26 to 237.74
 
     try:
         cmd    = ["wgrib2", filepath, "-lon", str(lon_gfs), str(lat)]
@@ -178,7 +174,7 @@ def extract_value_with_wgrib2(filepath: str, lat: float, lon: float) -> Optional
     return None
 
 
-# ── Step 1: Map [lat, lon] to nearest region ──────────────────────────────────
+#  Map [lat, lon] to nearest region
 
 def find_region_for_coordinates(lat: float, lon: float) -> Tuple[str, tuple]:
     """
@@ -217,8 +213,7 @@ def find_region_for_coordinates(lat: float, lon: float) -> Tuple[str, tuple]:
     return best_region, best_bbox
 
 
-# ── Step 2: Fetch 168h of data from NOMADS ───────────────────────────────────
-
+# Fetch 168h of data from NOMADS
 def fetch_from_nomads(lat: float, lon: float) -> List[dict]:
     """
     Download 168 hours of GFS forecast data for a lat/lon point from NOMADS.
@@ -289,7 +284,7 @@ def fetch_from_nomads(lat: float, lon: float) -> List[dict]:
     return records
 
 
-# ── Step 3: Save to SQLite ────────────────────────────────────────────────────
+#Save to SQLite
 
 def save_to_database(db_path: str, region: str, records: List[dict]) -> None:
     """
@@ -345,7 +340,7 @@ def save_to_database(db_path: str, region: str, records: List[dict]) -> None:
         logger.error(f"Database error: {e}")
 
 
-# ── Step 4: Print summary ─────────────────────────────────────────────────────
+#Print summary 
 
 def print_summary(records: List[dict]) -> None:
     """Print a clean table of results — this is what you show the mentor."""
@@ -367,7 +362,7 @@ def print_summary(records: List[dict]) -> None:
     print(f"{'='*55}\n")
 
 
-# ── Optional retraining ───────────────────────────────────────────────────────
+# Optional retraining 
 
 def trigger_retraining(download_dir: str) -> None:
     candidates = [
@@ -395,8 +390,7 @@ def trigger_retraining(download_dir: str) -> None:
         )
 
 
-# ── Main pipeline ─────────────────────────────────────────────────────────────
-
+#  Main pipeline
 def fetch_forecast(
     lat: float,
     lon: float,
@@ -445,7 +439,7 @@ def fetch_forecast(
     return True
 
 
-# ── CLI ───────────────────────────────────────────────────────────────────────
+# CLI 
 
 def main():
     parser = argparse.ArgumentParser(
