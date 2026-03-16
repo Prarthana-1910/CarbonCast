@@ -1522,3 +1522,108 @@ class VerifyOTP(APIView):
             "carbon_cast_version": carbon_cast_version
         })
 
+#new endpoint for real-time 168h weather forecast by [lat, lon]
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+class WeatherForecastApiView(APIView):
+    authentication_classes = authentication_classes
+    permission_classes = permission_classes
+
+    @swagger_auto_schema(
+        manual_parameters=[
+            openapi.Parameter('lat', openapi.IN_QUERY,
+                description="Latitude (e.g. 37.87)", type=openapi.TYPE_NUMBER),
+            openapi.Parameter('lon', openapi.IN_QUERY,
+                description="Longitude (e.g. -122.26)", type=openapi.TYPE_NUMBER),
+        ],
+        responses={
+            200: 'HTTP 200 OK - 168h weather forecast fetched and returned',
+            400: 'HTTP 400 Bad Request - Missing or invalid lat/lon',
+        }
+    )
+    def get(self, request, *args, **kwargs):
+        # Parse lat/lon from query params
+        try:
+            lat = float(request.query_params.get('lat'))
+            lon = float(request.query_params.get('lon'))
+        except (TypeError, ValueError):
+            return Response(
+                {"error": "lat and lon are required numeric parameters."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check cache first
+        cache_key = f"weather_forecast_{lat}_{lon}"
+        cached = cache.get(cache_key)
+        if cached:
+            return Response({"data": cached, "source": "cache"}, status=status.HTTP_200_OK)
+
+        # Import and run the NOMADS fetch pipeline
+        try:
+            from fetch_forecast_nomads import fetch_from_nomads, find_region_for_coordinates
+        except ImportError:
+            return Response(
+                {"error": "fetch_forecast_nomads module not found."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        # Fetch fresh data from NOMADS
+        region, _ = find_region_for_coordinates(lat, lon)
+        records   = fetch_from_nomads(lat, lon)
+
+        if not records:
+            return Response(
+                {"error": "No forecast data returned from NOMADS."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+
+        # Save to Weather model
+        from datetime import datetime, timezone
+        saved = 0
+        for r in records:
+            ts = datetime.now(timezone.utc).replace(
+                hour=r["forecast_hour"] % 24,
+                minute=0, second=0, microsecond=0
+            )
+            obj, created = Weather.objects.update_or_create(
+                region=region,
+                ts=ts,
+                defaults={
+                    "temp": r["value"] if r["variable"] == "TMP" else None,
+                    "data": {
+                        "variable":      r["variable"],
+                        "value":         r["value"],
+                        "forecast_hour": r["forecast_hour"],
+                        "lat":           lat,
+                        "lon":           lon,
+                        "cycle_date":    r["cycle_date"],
+                        "cycle_hour":    r["cycle_hour"],
+                    }
+                }
+            )
+            saved += 1
+
+        # Build response
+        response_data = [
+            {
+                "forecast_hour": r["forecast_hour"],
+                "variable":      r["variable"],
+                "value":         r["value"],
+                "lat":           r["lat"],
+                "lon":           r["lon"],
+                "cycle_date":    r["cycle_date"],
+                "cycle_hour":    r["cycle_hour"],
+            }
+            for r in records
+        ]
+
+        cache.set(cache_key, response_data, 300)  # cache 5 min
+
+        return Response({
+            "data":          response_data,
+            "region":        region,
+            "total_records": len(records),
+            "saved_to_db":   saved,
+        }, status=status.HTTP_200_OK)

@@ -1,5 +1,7 @@
 from django.contrib import admin
 from django.urls import path, include
+#new imports for views
+from .views import WeatherForecastApiView
 from .views import (
     CarbonIntensityApiView,
     EnergySourcesApiView,
@@ -30,4 +32,5 @@ urlpatterns = [
     path('SignIn', SignInApiView.as_view()),
     path('Logout', LogoutAPIView.as_view()),
     path('VerifyOTP', VerifyOTP.as_view()),
+    path('WeatherForecast', WeatherForecastApiView.as_view()), #new path added
 ]
