@@ -646,26 +646,49 @@ class EnergySourcesHistoryApiView(APIView):
 
     @swagger_auto_schema(
         manual_parameters=[
-            openapi.Parameter('region_code', openapi.IN_QUERY, description="Region code parameter (e.g., 'AECI').", type=openapi.TYPE_STRING),
-            openapi.Parameter('date', openapi.IN_QUERY, description="Date parameter (in the format: 'YYYY-MM-DD').", type=openapi.TYPE_STRING),
+            openapi.Parameter('region', openapi.IN_QUERY,
+                description="Balancing authority region code (e.g. CISO, PJM, ERCOT, MISO)",
+                type=openapi.TYPE_STRING),
         ],
         responses={
-            200: 'HTTP 200 OK - Success response description',
-            400: 'HTTP 400 Bad Request - Description of possible error responses',
+            200: 'HTTP 200 OK - 168h weather forecast for the balancing authority region',
+            400: 'HTTP 400 Bad Request - Missing or invalid region code',
         }
     )
-
     def get(self, request, *args, **kwargs):
+        from coordinate_utils import REGION_COORDINATES
 
-        if permissions.AllowAny not in permission_classes:
-            user = request.user
-            print("User:",user)
-            if not check_throttle_limit(user):
-                return Response({
-                    "status": "fail",
-                    "message": "Throttle limit reached",
-                    "carbon_cast_version": carbon_cast_version
-                }, status=status.HTTP_429_TOO_MANY_REQUESTS, headers={'Retry-After': 86400})
+        region_code = request.query_params.get('region', '').upper()
+
+        if not region_code:
+            return Response(
+                {
+                    "error": "region parameter is required.",
+                    "example": "?region=CISO",
+                    "supported_regions": sorted(REGION_COORDINATES.keys())
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if region_code not in REGION_COORDINATES:
+            return Response(
+                {
+                    "error": f"Unknown region '{region_code}'.",
+                    "supported_regions": sorted(REGION_COORDINATES.keys())
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # derive centre [lat, lon] from the balancing authority bounding box
+        nlat, slat, wlon, elon = REGION_COORDINATES[region_code]
+        lat = (nlat + slat) / 2
+        lon = (wlon + elon) / 2
+
+        # Check cache first
+        cache_key = f"weather_forecast_{region_code}"
+        cached = cache.get(cache_key)
+        if cached:
+            return Response({"data": cached, "source": "cache"}, status=status.HTTP_200_OK)
 
         class QueryParamsSerializer(serializers.Serializer):
             region_code = serializers.CharField(required=False)
@@ -1533,26 +1556,49 @@ class WeatherForecastApiView(APIView):
 
     @swagger_auto_schema(
         manual_parameters=[
-            openapi.Parameter('lat', openapi.IN_QUERY,
-                description="Latitude (e.g. 37.87)", type=openapi.TYPE_NUMBER),
-            openapi.Parameter('lon', openapi.IN_QUERY,
-                description="Longitude (e.g. -122.26)", type=openapi.TYPE_NUMBER),
+            openapi.Parameter('region', openapi.IN_QUERY,
+                description="Balancing authority region code (e.g. CISO, PJM, ERCOT, MISO)",
+                type=openapi.TYPE_STRING),
         ],
         responses={
-            200: 'HTTP 200 OK - 168h weather forecast fetched and returned',
-            400: 'HTTP 400 Bad Request - Missing or invalid lat/lon',
+            200: 'HTTP 200 OK - 168h weather forecast for the balancing authority region',
+            400: 'HTTP 400 Bad Request - Missing or invalid region code',
         }
     )
     def get(self, request, *args, **kwargs):
-        # Parse lat/lon from query params
-        try:
-            lat = float(request.query_params.get('lat'))
-            lon = float(request.query_params.get('lon'))
-        except (TypeError, ValueError):
+        from coordinate_utils import REGION_COORDINATES
+
+        region_code = request.query_params.get('region', '').upper()
+
+        if not region_code:
             return Response(
-                {"error": "lat and lon are required numeric parameters."},
+                {
+                    "error": "region parameter is required.",
+                    "example": "?region=CISO",
+                    "supported_regions": sorted(REGION_COORDINATES.keys())
+                },
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        if region_code not in REGION_COORDINATES:
+            return Response(
+                {
+                    "error": f"Unknown region '{region_code}'.",
+                    "supported_regions": sorted(REGION_COORDINATES.keys())
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Derive centre [lat, lon] from the balancing authority bounding box
+        nlat, slat, wlon, elon = REGION_COORDINATES[region_code]
+        lat = (nlat + slat) / 2
+        lon = (wlon + elon) / 2
+
+        # Check cache first
+        cache_key = f"weather_forecast_{region_code}"
+        cached = cache.get(cache_key)
+        if cached:
+            return Response({"data": cached, "source": "cache"}, status=status.HTTP_200_OK)
 
         # Check cache first
         cache_key = f"weather_forecast_{lat}_{lon}"
