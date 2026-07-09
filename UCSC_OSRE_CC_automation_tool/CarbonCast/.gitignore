@@ -206,3 +206,6 @@ rdams_token.txt
 #ignore all pycache files
 **/__pycache__/
 **/*.pyc
+
+token2.txt
+rdams_token.txt

@@ -67,7 +67,7 @@ class CapacityConfig:
     priority_boost_at_critical: bool = True
     emergency_processing_enabled: bool = True
     # Upload automation settings - AGGRESSIVE SETTINGS FOR 10-REQUEST TARGET
-    enable_upload_automation: bool = True
+    enable_upload_automation: bool = False  # PERMANENTLY DISABLED
     upload_capacity_threshold: int = 10  # Changed from 9 to 10 - upload even at 10 requests
     upload_batch_size: int = 5  # Increased from 2 to 5 for more aggressive uploading
     upload_rate_limit_delay: float = 1.0  # Reduced from 2.0 to 1.0 for faster uploads
@@ -519,7 +519,7 @@ class CapacityManager:
         self.logger.debug(f"✅ CAPACITY NORMAL: {capacity_status.total_requests}/10 requests active")
         
         # AGGRESSIVE STRATEGY 1: Always try to upload when below 10 requests
-        if self.config.enable_upload_automation and capacity_status.total_requests < 10:
+        if False:  # DISABLED - requests already submitted
             available_slots = 10 - capacity_status.total_requests
             self.logger.info(f"🚀 AGGRESSIVE UPLOAD: {available_slots} slots available, attempting to fill all slots")
             
@@ -614,7 +614,7 @@ class CapacityManager:
             )
             
             # AGGRESSIVE: Even if no slots, try to upload 1 file to maintain pressure
-            if max_uploadable <= 0 and len(control_files) > 0:
+            if False:  # DISABLED force upload
                 max_uploadable = 1
                 self.logger.info(f"🔥 AGGRESSIVE UPLOAD: No slots available but forcing 1 file upload to maintain 10-request target")
             

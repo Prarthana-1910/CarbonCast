@@ -1,205 +1,200 @@
 """
-Script 2: RDA Fetch Manager
-- Submits control files to RDA in batches of ≤10
-- Polls until complete, then downloads
-- Hands off to Script 3 (process_weather_data.py) per region when all 4 vars done
-- Runs continuously until all regions are done; safe to restart (tracks state)
+RDA Fetch Manager - single region per run
+Usage: python3 fetch_manager.py REGION
 """
+import os, sys, json, time, glob, subprocess, logging
 
-import os
-import sys
-import json
-import time
-import glob
-import subprocess
-import logging
-from datetime import datetime
+BASE_DIR      = os.path.expanduser("~/CarbonCast_spring26/UCSC_OSRE_CC_automation_tool/CarbonCast")
+CONTROL_DIR   = os.path.join(BASE_DIR, "control_files")
+DOWNLOAD_DIR  = os.path.join(BASE_DIR, "downloaded_files")
+STATE_FILE    = os.path.join(BASE_DIR, "pipeline_state.json")
+LOG_FILE      = os.path.join(BASE_DIR, "logs", "rda_fetch_manager.log")
 
-# ── CONFIG ────────────────────────────────────────────────────────────────────
-BASE_DIR        = os.path.expanduser("~/CarbonCast_spring26/UCSC_OSRE_CC_automation_tool/CarbonCast")
-CONTROL_DIR     = os.path.join(BASE_DIR, "control_files")
-DOWNLOAD_DIR    = os.path.join(BASE_DIR, "downloaded_files")
-STATE_FILE      = os.path.join(BASE_DIR, "pipeline_state.json")
-LOG_FILE        = os.path.join(BASE_DIR, "logs", "fetch_manager.log")
-
-RDA_CLIENT      = os.path.join(BASE_DIR, "src/python/rdams_client.py")
-VENV_PYTHON     = os.path.join(BASE_DIR, "src/python/venv/bin/python")
-
-MAX_CONCURRENT  = 10
-POLL_INTERVAL   = 120   # seconds between status checks
-# ─────────────────────────────────────────────────────────────────────────────
+POLL_INTERVAL   = 60    # 1 min, per request
+ERROR_THRESHOLD = 3
+REQUEST_ID_FIELD = "request_index"
 
 os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(message)s",
-    handlers=[logging.FileHandler(LOG_FILE), logging.StreamHandler()]
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s",
+                     handlers=[logging.FileHandler(LOG_FILE), logging.StreamHandler()])
 log = logging.getLogger(__name__)
-
 sys.path.insert(0, os.path.join(BASE_DIR, "src/python"))
 import rdams_client as rc
 
 
 def load_state():
+    default = {"submitted": {}, "downloaded": [], "error_counts": {}}
     if os.path.exists(STATE_FILE):
-        with open(STATE_FILE) as f:
-            return json.load(f)
-    return {"submitted": {}, "completed": [], "failed": []}
+        s = json.load(open(STATE_FILE))
+        for k, v in default.items():
+            s.setdefault(k, v)
+        return s
+    return default
 
 
 def save_state(state):
-    with open(STATE_FILE, "w") as f:
-        json.dump(state, f, indent=2)
+    tmp = STATE_FILE + ".tmp"
+    json.dump(state, open(tmp, "w"), indent=2)
+    os.replace(tmp, STATE_FILE)
 
 
-def get_all_control_files():
-    return sorted(glob.glob(os.path.join(CONTROL_DIR, "*.ctl")))
-
-
-def region_from_ctl(ctl_path):
-    fname = os.path.basename(ctl_path)
-    return fname.split("_")[0]
-
-
-def var_from_ctl(ctl_path):
-    fname = os.path.basename(ctl_path).replace("_control.ctl", "")
-    return "_".join(fname.split("_")[1:])
-
-
-def get_active_requests():
-    """Return dict of {request_id: status} from RDA."""
+def get_rda_all():
     try:
-        result = rc.get_status()
-        if not result or "data" not in result:
+        r = rc.get_status()
+        if not r or "data" not in r:
             return {}
-        requests = result["data"] if isinstance(result["data"], list) else [result["data"]]
-        return {str(r.get("request_index", "")): r.get("status", "") for r in requests if r.get("request_index")}
+        reqs = r["data"] if isinstance(r["data"], list) else [r["data"]]
+        out = {}
+        for x in reqs:
+            rid = x.get(REQUEST_ID_FIELD) or x.get("request_index")
+            if rid:
+                out[str(rid)] = x
+        return out
     except Exception as e:
         log.warning(f"Status check failed: {e}")
         return {}
 
 
-def submit_ctl(ctl_path):
-    """Submit one control file to RDA, return request_id or None."""
-    try:
-        result = rc.submit_json(ctl_path)
-        if result and "data" in result:
-            req_id = str(result["data"].get("request_index", ""))
-            if req_id:
-                log.info(f"Submitted {os.path.basename(ctl_path)} → request {req_id}")
-                return req_id
-        log.warning(f"Submit failed for {ctl_path}: {result}")
-        return None
-    except Exception as e:
-        log.error(f"Submit error {ctl_path}: {e}")
-        return None
+def var_from_ctl(p):
+    return os.path.basename(p).replace("_control.ctl", "").split("_", 1)[1]
 
 
-def download_request(req_id, region, var_name):
-    """Download completed request to downloaded_files/REGION/VAR/"""
-    out_dir = os.path.join(DOWNLOAD_DIR, region, var_name)
+def count_existing_files(region):
+    region_dir = os.path.join(DOWNLOAD_DIR, region)
+    if not os.path.isdir(region_dir):
+        return 0
+    return sum(len(files) for _, _, files in os.walk(region_dir))
+
+
+def download_request(req_id, out_dir):
     os.makedirs(out_dir, exist_ok=True)
     try:
-        result = rc.get_filelist(req_id)
-        if not result or "data" not in result:
-            log.error(f"No filelist for request {req_id}")
+        token_file = os.path.join(BASE_DIR, "rdams_token.txt")
+        token = open(token_file).read().strip() if os.path.exists(token_file) else ""
+        r = rc.get_filelist(int(req_id))
+        if not r or "data" not in r:
+            log.error(f"No filelist for {req_id}: raw response={r}")
             return False
-        files = result["data"].get("file", [])
-        for f in files:
-            url = f.get("web_path", "")
-            if url:
-                fname = os.path.basename(url)
-                out_path = os.path.join(out_dir, fname)
-                if os.path.exists(out_path):
-                    log.info(f"Already exists: {fname}")
-                    continue
-                log.info(f"Downloading {fname} → {out_dir}")
-                subprocess.run(["wget", "-q", "-O", out_path, url], check=True)
+        data = r["data"]
+        files = data.get("web_files") or data.get("file") or []
+        if not files:
+            log.error(f"Empty/unexpected filelist keys for {req_id}: {list(data.keys())}")
+            return False
+        urls = sorted({f["web_path"] for f in files if f.get("web_path")})
+        for url in urls:
+            fname = os.path.basename(url)
+            out = os.path.join(out_dir, fname)
+            if os.path.exists(out) and os.path.getsize(out) > 0:
+                continue
+            cmd = ["wget", "-q", "-O", out, url]
+            if token:
+                cmd = ["wget", "-q", "--header", f"Authorization: Bearer {token}", "-O", out, url]
+            subprocess.run(cmd, check=True)
+            log.info(f"  Downloaded: {fname}")
         return True
     except Exception as e:
-        log.error(f"Download failed for request {req_id}: {e}")
+        log.error(f"Download error for {req_id}: {e}")
         return False
 
 
-def region_download_complete(region, state):
-    """True if all 4 variables for a region are in completed list."""
-    vars_done = [v for (r, v) in [k.split(":", 1) for k in state["completed"] if ":" in k] if r == region]
-    return set(vars_done) >= {"temp", "wind", "dswrf", "rain"}
-
-
-def trigger_processing(region):
-    """Call Script 3 for this region."""
-    script = os.path.join(BASE_DIR, "src/python/pipeline/3_process_weather_data.py")
-    log.info(f"🔄 Triggering processing for {region}")
-    subprocess.Popen([VENV_PYTHON, script, "--region", region])
+def submit_ctl(ctl_path):
+    try:
+        result = rc.submit(ctl_path)
+        if result and result.get("status") == "ok":
+            req_id = result.get("data", {}).get("request_id")
+            if req_id:
+                log.info(f"Submitted {os.path.basename(ctl_path)} -> {req_id}")
+                return str(req_id)
+        log.warning(f"Submit failed {os.path.basename(ctl_path)}: {result}")
+        return None
+    except Exception as e:
+        log.error(f"Submit error for {os.path.basename(ctl_path)}: {e}")
+        return None
 
 
 def main():
-    log.info("=== RDA Fetch Manager started ===")
+    if len(sys.argv) < 2:
+        print("Usage: python3 rda_fetch_manager.py REGION")
+        sys.exit(1)
+    region = sys.argv[1]
+    os.chdir(BASE_DIR)
+
+    existing = count_existing_files(region)
+    log.info(f"=== {region}: {existing} files already on disk ===")
+
     state = load_state()
+    region_ctls = sorted(glob.glob(os.path.join(CONTROL_DIR, f"{region}_*_control.ctl")))
+    if not region_ctls:
+        log.error(f"No ctl files found for region {region}")
+        sys.exit(1)
+    log.info(f"{region}: {len(region_ctls)} ctl files to submit (expect 8 = 4 vars x 2 chunks)")
 
-    all_ctls = get_all_control_files()
-    # Filter out already completed
-    pending_ctls = [
-        c for c in all_ctls
-        if f"{region_from_ctl(c)}:{var_from_ctl(c)}" not in state["completed"]
-        and os.path.basename(c) not in [v for v in state["submitted"].values()]
-    ]
-    log.info(f"Total control files: {len(all_ctls)}, pending: {len(pending_ctls)}")
+    # submit only ctls whose var/chunk isn't already downloaded
+    for ctl in region_ctls:
+        bn = os.path.basename(ctl)
+        if bn in state["submitted"].values():
+            continue
+        var = var_from_ctl(ctl)
+        var_dir = os.path.join(DOWNLOAD_DIR, region, var)
+        if os.path.isdir(var_dir) and os.listdir(var_dir):
+            log.info(f"Skipping {bn} — {var} already has files")
+            continue
+        req_id = submit_ctl(ctl)
+        if req_id:
+            state["submitted"][req_id] = bn
+            save_state(state)
+            time.sleep(15)
 
-    ctl_queue = list(pending_ctls)
+    pending = {rid: bn for rid, bn in state["subm   itted"].items()
+               if bn in [os.path.basename(c) for c in region_ctls]}
 
-    while ctl_queue or state["submitted"]:
-        active = get_active_requests()
-        active_count = len(active)
-        log.info(f"Active RDA requests: {active_count}, queue remaining: {len(ctl_queue)}")
-
-        # Check completed/failed among submitted
-        for req_id, ctl_basename in list(state["submitted"].items()):
-            status = active.get(req_id, "unknown")
-            if status in ("Completed", "completed"):
-                # find matching ctl
-                ctl_path = next((c for c in all_ctls if os.path.basename(c) == ctl_basename), None)
-                if ctl_path:
-                    region = region_from_ctl(ctl_path)
-                    var    = var_from_ctl(ctl_path)
-                    success = download_request(req_id, region, var)
-                    if success:
-                        key = f"{region}:{var}"
-                        state["completed"].append(key)
-                        del state["submitted"][req_id]
-                        save_state(state)
-                        log.info(f"✅ {region}/{var} downloaded")
-                        if region_download_complete(region, state):
-                            trigger_processing(region)
-            elif status in ("Purged", "Error", "error"):
-                log.warning(f"Request {req_id} ({ctl_basename}) failed with status: {status}")
-                state["failed"].append(ctl_basename)
-                del state["submitted"][req_id]
+    while pending:
+        all_rda = get_rda_all()
+        for req_id, bn in list(pending.items()):
+            rda_req = all_rda.get(req_id)
+            if not rda_req:
+                continue
+            status = rda_req.get("status")
+            if status == "Completed":
+                var = var_from_ctl(os.path.join(CONTROL_DIR, bn))
+                out_dir = os.path.join(DOWNLOAD_DIR, region, var)
+                log.info(f"Downloading {req_id} ({region}/{var})")
+                if download_request(req_id, out_dir):
+                    state["downloaded"].append(f"{region}:{var}")
+                    state["submitted"].pop(req_id, None)
+                    state["error_counts"].pop(req_id, None)
+                    pending.pop(req_id)
+                    save_state(state)
+                    try:
+                        rc.purge_request(int(req_id))
+                    except Exception as e:
+                        log.warning(f"Purge failed for {req_id}: {e}")
+            elif status == "Error":
+                cnt = state["error_counts"].get(req_id, 0) + 1
+                state["error_counts"][req_id] = cnt
+                log.warning(f"{req_id} error {cnt}/{ERROR_THRESHOLD}")
+                if cnt >= ERROR_THRESHOLD:
+                    ctl_path = os.path.join(CONTROL_DIR, bn)
+                    state["submitted"].pop(req_id, None)
+                    state["error_counts"].pop(req_id, None)
+                    pending.pop(req_id)
+                    try:
+                        rc.purge_request(int(req_id))
+                    except Exception:
+                        pass
+                    new_id = submit_ctl(ctl_path)
+                    if new_id:
+                        state["submitted"][new_id] = bn
+                        pending[new_id] = bn
                 save_state(state)
 
-        # Submit new requests up to MAX_CONCURRENT
-        slots = MAX_CONCURRENT - len(state["submitted"])
-        while slots > 0 and ctl_queue:
-            ctl = ctl_queue.pop(0)
-            req_id = submit_ctl(ctl)
-            if req_id:
-                state["submitted"][req_id] = os.path.basename(ctl)
-                save_state(state)
-                slots -= 1
-                active_count += 1
-            time.sleep(2)  # brief pause between submissions
+        if pending:
+            log.info(f"{len(pending)} still pending, sleeping {POLL_INTERVAL}s")
+            time.sleep(POLL_INTERVAL)
 
-        if not ctl_queue and not state["submitted"]:
-            break
-
-        log.info(f"Sleeping {POLL_INTERVAL}s...")
-        time.sleep(POLL_INTERVAL)
-
-    log.info(f"=== Fetch complete. Completed: {len(state['completed'])}, Failed: {len(state['failed'])} ===")
-    if state["failed"]:
-        log.warning(f"Failed: {state['failed']}")
+    final_count = count_existing_files(region)
+    log.info(f"=== {region} DONE. files before={existing}, files now={final_count} ===")
+    log.info("Enter next region manually and rerun.")
 
 
 if __name__ == "__main__":

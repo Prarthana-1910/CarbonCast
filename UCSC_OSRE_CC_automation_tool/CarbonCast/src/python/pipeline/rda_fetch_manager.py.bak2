@@ -1,0 +1,289 @@
+"""
+RDA Fetch Manager - Corrected version
+- Fills all MAX_OPEN RDA slots every cycle
+- On startup, downloads any already-Completed requests
+- Purges errored requests after ERROR_THRESHOLD consecutive checks, then requeues
+- Tracks downloaded as a list of "REGION:var_chunkN" strings
+- Reconciles requests RDA already knows about that we don't have in state["submitted"]
+
+IMPORTANT: run the one-line check described in chat first:
+    python3 -c "import sys; sys.path.insert(0,'src/python'); import rdams_client as rc; r=rc.get_status(); print(list(r['data'][0].keys()))"
+and confirm REQUEST_ID_FIELD below matches what RDA actually returns.
+"""
+import os, sys, json, time, glob, subprocess, logging
+
+BASE_DIR      = os.path.expanduser("~/CarbonCast_spring26/UCSC_OSRE_CC_automation_tool/CarbonCast")
+CONTROL_DIR   = os.path.join(BASE_DIR, "control_files")
+DOWNLOAD_DIR  = os.path.join(BASE_DIR, "downloaded_files")
+STATE_FILE    = os.path.join(BASE_DIR, "pipeline_state.json")
+LOG_FILE      = os.path.join(BASE_DIR, "logs", "fetch_manager.log")
+
+MAX_OPEN        = 9
+POLL_INTERVAL   = 300   # 5 minutes
+ERROR_THRESHOLD = 3     # purge+requeue after this many consecutive Error checks
+
+# CONFIRMED via live check on 2026-06-30: request_id is a *string* like
+# "PATIL888907" (username-prefixed), while request_index is the plain
+# integer 888907 that matches what's stored in pipeline_state.json and
+# what int(req_id) calls need downstream. Use request_index.
+REQUEST_ID_FIELD = "request_index"
+
+os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+    handlers=[logging.FileHandler(LOG_FILE), logging.StreamHandler()]
+)
+log = logging.getLogger(__name__)
+sys.path.insert(0, os.path.join(BASE_DIR, "src/python"))
+import rdams_client as rc
+
+
+def load_state():
+    default = {"submitted": {}, "completed": [], "failed": [], "downloaded": [], "error_counts": {}}
+    if os.path.exists(STATE_FILE):
+        with open(STATE_FILE) as f:
+            s = json.load(f)
+        for k, v in default.items():
+            if k not in s:
+                s[k] = v
+        return s
+    return default
+
+
+def save_state(state):
+    tmp = STATE_FILE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(state, f, indent=2)
+    os.replace(tmp, STATE_FILE)  # atomic write, avoids corruption if killed mid-write
+
+
+def get_rda_all():
+    """Returns dict of request_id(str) -> request_data. Tries both known field names."""
+    try:
+        r = rc.get_status()
+        if not r or "data" not in r:
+            log.warning(f"get_status returned no data: {r}")
+            return {}
+        reqs = r["data"] if isinstance(r["data"], list) else [r["data"]]
+        out = {}
+        for x in reqs:
+            rid = x.get(REQUEST_ID_FIELD)
+            if rid is None:
+                # fallback only to request_index — never to request_id, which
+                # is a "PATIL123456" string, not a plain int usable downstream
+                rid = x.get("request_index")
+            if rid:
+                out[str(rid)] = x
+        if reqs and not out:
+            log.error(f"get_rda_all parsed 0 requests from {len(reqs)} raw entries — "
+                      f"field name mismatch. Sample keys: {list(reqs[0].keys())}")
+        return out
+    except Exception as e:
+        log.warning(f"Status check failed: {e}")
+        return {}
+
+
+def count_open(all_rda):
+    closed = ("Error", "Purged", "Set for Purge")
+    return sum(1 for x in all_rda.values() if x.get("status") not in closed)
+
+
+def download_request(req_id, out_dir):
+    os.makedirs(out_dir, exist_ok=True)
+    try:
+        token_file = os.path.join(BASE_DIR, "rdams_token.txt")
+        token = open(token_file).read().strip() if os.path.exists(token_file) else ""
+        r = rc.get_filelist(int(req_id))
+        if not r or "data" not in r:
+            log.error(f"No filelist for {req_id}")
+            return False
+        data = r["data"]
+        files = data.get("web_files") or data.get("file") or []
+        urls = sorted({f["web_path"] for f in files if f.get("web_path")})
+        if not urls:
+            log.error(f"Empty filelist for {req_id}")
+            return False
+        log.info(f"  {len(urls)} files to download for {req_id}")
+        for url in urls:
+            fname = os.path.basename(url)
+            out = os.path.join(out_dir, fname)
+            if os.path.exists(out) and os.path.getsize(out) > 0:
+                log.info(f"  Already exists: {fname}")
+                continue
+            cmd = ["wget", "-q", "-O", out, url]
+            if token:
+                cmd = ["wget", "-q", "--header", f"Authorization: Bearer {token}", "-O", out, url]
+            subprocess.run(cmd, check=True)
+            log.info(f"  Downloaded: {fname}")
+        return True
+    except Exception as e:
+        log.error(f"Download error for {req_id}: {e}")
+        return False
+
+
+def region_from_ctl(p):
+    return os.path.basename(p).split("_")[0]
+
+
+def var_from_ctl(p):
+    # AECI_wind_chunk2_control.ctl -> wind_chunk2
+    return os.path.basename(p).replace("_control.ctl", "").split("_", 1)[1]
+
+
+def submit_ctl(ctl_path):
+    try:
+        result = rc.submit(ctl_path)
+        if result and result.get("status") == "ok":
+            data = result.get("data", {})
+            req_id = data.get(REQUEST_ID_FIELD) or data.get("request_index")
+            if req_id:
+                req_id = str(req_id)
+                log.info(f"Submitted {os.path.basename(ctl_path)} -> {req_id}")
+                return req_id
+        log.warning(f"Submit failed {os.path.basename(ctl_path)}: {result}")
+        return None
+    except Exception as e:
+        log.error(f"Submit error for {os.path.basename(ctl_path)}: {e}")
+        return None
+
+
+def main():
+    os.chdir(BASE_DIR)
+    log.info("=== RDA Fetch Manager (corrected) started ===")
+    state = load_state()
+    all_ctls = sorted(glob.glob(os.path.join(CONTROL_DIR, "*.ctl")))
+    done_keys = set(state["downloaded"])
+
+    # Reconcile: requests RDA already knows about that aren't in our submitted map.
+    # Matches by region name appearing in rinfo, only for ctls we haven't already
+    # marked submitted or downloaded.
+    existing_rda = get_rda_all()
+    known_req_ids = set(state["submitted"].keys())
+    submitted_basenames_initial = set(state["submitted"].values())
+    for req_id, rda_req in existing_rda.items():
+        if req_id in known_req_ids:
+            continue
+        if rda_req.get("status") in ("Error", "Purged", "Set for Purge"):
+            continue
+        rinfo = (rda_req.get("rinfo") or "").lower()
+        for ctl in all_ctls:
+            basename = os.path.basename(ctl)
+            if basename in submitted_basenames_initial:
+                continue
+            region = region_from_ctl(ctl).lower()
+            var = var_from_ctl(ctl)
+            key = f"{region_from_ctl(ctl)}:{var}"
+            if key in done_keys:
+                continue
+            if region in rinfo:
+                state["submitted"][req_id] = basename
+                submitted_basenames_initial.add(basename)
+                log.info(f"Reconciled existing RDA request {req_id} -> {basename}")
+                break
+    save_state(state)
+
+    submitted_basenames = set(state["submitted"].values())
+    ctl_queue = [c for c in all_ctls
+                 if f"{region_from_ctl(c)}:{var_from_ctl(c)}" not in done_keys
+                 and os.path.basename(c) not in submitted_basenames]
+    log.info(f"CTLs total={len(all_ctls)}, pending={len(ctl_queue)}, "
+             f"done={len(done_keys)}, already_submitted={len(submitted_basenames)}")
+
+    while True:
+        all_rda = get_rda_all()
+        n_open = count_open(all_rda)
+        log.info(f"RDA: {n_open} open, {len(ctl_queue)} queued, {len(state['submitted'])} tracked as submitted")
+
+        # ── Step 1: download anything Completed ────────────────────────────
+        for req_id, rda_req in list(all_rda.items()):
+            if rda_req.get("status") != "Completed":
+                continue
+            ctl_basename = state["submitted"].get(req_id)
+            if ctl_basename:
+                ctl_path = next((c for c in all_ctls if os.path.basename(c) == ctl_basename), None)
+                region = region_from_ctl(ctl_path) if ctl_path else "UNKNOWN"
+                var = var_from_ctl(ctl_path) if ctl_path else req_id
+            else:
+                region, var = "pending", req_id
+
+            out_dir = os.path.join(DOWNLOAD_DIR, region, var)
+            log.info(f"Downloading completed {req_id} ({region}/{var})")
+            if download_request(req_id, out_dir):
+                key = f"{region}:{var}"
+                if key not in state["downloaded"]:
+                    state["downloaded"].append(key)
+                state["submitted"].pop(req_id, None)
+                state["error_counts"].pop(req_id, None)
+                save_state(state)
+                try:
+                    rc.purge_request(int(req_id))
+                    log.info(f"Purged {req_id}")
+                except Exception as e:
+                    log.warning(f"Purge failed for {req_id}: {e}")
+
+        # ── Step 2: handle errors — purge + requeue after ERROR_THRESHOLD ───
+        all_rda = get_rda_all()
+        for req_id, rda_req in list(all_rda.items()):
+            if rda_req.get("status") == "Error":
+                cnt = state["error_counts"].get(req_id, 0) + 1
+                state["error_counts"][req_id] = cnt
+                log.warning(f"Request {req_id} error count {cnt}/{ERROR_THRESHOLD}")
+                if cnt >= ERROR_THRESHOLD:
+                    ctl_basename = state["submitted"].pop(req_id, None)
+                    state["error_counts"].pop(req_id, None)
+                    if ctl_basename:
+                        ctl_path = next((c for c in all_ctls if os.path.basename(c) == ctl_basename), None)
+                        if ctl_path and ctl_path not in ctl_queue:
+                            ctl_queue.insert(0, ctl_path)
+                            log.info(f"Requeued {ctl_basename} after repeated errors")
+                    try:
+                        rc.purge_request(int(req_id))
+                    except Exception:
+                        pass
+                    save_state(state)
+            else:
+                if req_id in state["error_counts"]:
+                    state["error_counts"].pop(req_id, None)
+                    save_state(state)
+
+        # ── Step 3: submit new requests into any free slots ─────────────────
+        all_rda = get_rda_all()
+        n_open = count_open(all_rda)
+        free = MAX_OPEN - n_open
+        log.info(f"After cleanup: {n_open} open, {free} free slots, {len(ctl_queue)} queued")
+
+        submitted_this_cycle = 0
+        while free > 0 and ctl_queue:
+            ctl = ctl_queue.pop(0)
+            key = f"{region_from_ctl(ctl)}:{var_from_ctl(ctl)}"
+            if key in set(state["downloaded"]):
+                continue
+            if os.path.basename(ctl) in state["submitted"].values():
+                continue
+            req_id = submit_ctl(ctl)
+            if req_id:
+                state["submitted"][req_id] = os.path.basename(ctl)
+                save_state(state)
+                free -= 1
+                submitted_this_cycle += 1
+                time.sleep(2)
+            else:
+                ctl_queue.insert(0, ctl)
+                log.warning("Submit failed — stopping submissions this cycle, will retry next cycle")
+                break
+
+        log.info(f"Submitted {submitted_this_cycle} new requests this cycle")
+
+        if not ctl_queue and not state["submitted"]:
+            log.info("=== All done! ===")
+            break
+
+        log.info(f"Sleeping {POLL_INTERVAL}s before next cycle...")
+        time.sleep(POLL_INTERVAL)
+
+    log.info(f"Final: downloaded={len(state['downloaded'])}, remaining_queue={len(ctl_queue)}")
+
+
+if __name__ == "__main__":
+    main()

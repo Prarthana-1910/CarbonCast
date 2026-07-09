@@ -202,7 +202,9 @@ def submit_single_file(file_path: str,
             if response.get('http_response') == 200:
                 # Extract request ID
                 request_id = None
-                if 'request_id' in response:
+                if 'request_id' in response.get('data', {}):
+                    request_id = str(response['data']['request_id'])
+                elif 'request_id' in response:
                     request_id = str(response['request_id'])
                 elif 'id' in response:
                     request_id = str(response['id'])

@@ -1,0 +1,10 @@
+dataset=ds084.1
+date=202512010000/to/202603010000
+datetype=init
+param=DSWRF
+level=SFC:0
+nlat=41.75
+slat=34.25
+wlon=-98.5
+elon=-88.5
+product=0-3 hour ave fcst/3-6 hour ave fcst/6-9 hour ave fcst/9-12 hour ave fcst/12-15 hour ave fcst/15-18 hour ave fcst/18-21 hour ave fcst/21-24 hour ave fcst/24-27 hour ave fcst/27-30 hour ave fcst/30-33 hour ave fcst/33-36 hour ave fcst/36-39 hour ave fcst/39-42 hour ave fcst/42-45 hour ave fcst/45-48 hour ave fcst/48-51 hour ave fcst/51-54 hour ave fcst/54-57 hour ave fcst/57-60 hour ave fcst/60-63 hour ave fcst/63-66 hour ave fcst/66-69 hour ave fcst/69-72 hour ave fcst/72-75 hour ave fcst/75-78 hour ave fcst/78-81 hour ave fcst/81-84 hour ave fcst/84-87 hour ave fcst/87-90 hour ave fcst/90-93 hour ave fcst/93-96 hour ave fcst/96-99 hour ave fcst/99-102 hour ave fcst/102-105 hour ave fcst/105-108 hour ave fcst/108-111 hour ave fcst/111-114 hour ave fcst/114-117 hour ave fcst/117-120 hour ave fcst/120-123 hour ave fcst/123-126 hour ave fcst/126-129 hour ave fcst/129-132 hour ave fcst/132-135 hour ave fcst/135-138 hour ave fcst/138-141 hour ave fcst/141-144 hour ave fcst/144-147 hour ave fcst/147-150 hour ave fcst/150-153 hour ave fcst/153-156 hour ave fcst/156-159 hour ave fcst/159-162 hour ave fcst/162-165 hour ave fcst/165-168 hour ave fcst

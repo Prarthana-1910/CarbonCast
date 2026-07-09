@@ -316,7 +316,9 @@ class BatchAutomationSystem:
             # Submit using rdams_client
             result = rdams_client.submit(control_file)
             
-            if result and 'request_index' in result:
+            if result and 'request_id' in result.get('data', {}):
+                request_id = str(result['data']['request_id'])
+            elif result and 'request_index' in result:
                 request_id = str(result['request_index'])
                 
                 # Extract region and variable

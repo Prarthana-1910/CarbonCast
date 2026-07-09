@@ -42,7 +42,7 @@ except ImportError:
     print("Rate limiting components not available - running in basic mode")
 
 
-BASE_URL = 'https://rda.ucar.edu/api/'
+BASE_URL = 'https://gdex.ucar.edu/api/'
 DEFAULT_AUTH_FILE = './rdams_token.txt'
 
 # Python 2 compatibility

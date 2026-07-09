@@ -152,7 +152,7 @@ class IntegratedBatchSystem:
             # Create enhanced capacity manager
             from automation.capacity_manager import CapacityConfig
             capacity_config = CapacityConfig(
-                enable_upload_automation=self.config.get('automation', {}).get('auto_upload_enabled', True),
+                enable_upload_automation=False,  # DISABLED
                 upload_batch_size=self.config.get('automation', {}).get('max_upload_batch_size', 10),
                 upload_rate_limit_delay=self.config.get('upload', {}).get('rate_limit_delay', 0.5),
                 control_files_dir=self.config.get('directories', {}).get('control_files_dir', './control_files')
@@ -418,7 +418,7 @@ class IntegratedBatchSystem:
         """
         try:
             # Check if auto-upload is enabled in configuration
-            auto_upload_enabled = self.config.get('automation', {}).get('auto_upload_enabled', True)
+            auto_upload_enabled = False  # DISABLED
             if not auto_upload_enabled:
                 self.logger.debug("Auto-upload is disabled in configuration")
                 return
