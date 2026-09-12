@@ -1,0 +1,26 @@
+# Production requirements for Render Web Service deployment
+# Only REST API runtime dependencies (no heavy TensorFlow / training libraries)
+
+Django==4.2.5
+djangorestframework==3.14.0
+django-cors-headers==4.3.1
+drf-yasg==1.21.7
+sqlparse==0.4.4
+python-dotenv>=1.0
+
+# Database
+psycopg[binary]>=3.1.8
+dj-database-url>=2.1.0
+
+# Server
+gunicorn>=21.2.0
+
+# Celery Beat / Results for INSTALLED_APPS
+django-celery-beat>=2.5.0
+django-celery-results>=2.5.0
+
+# Data / utilities used in services
+pandas>=1.4.0
+numpy>=1.23.0
+requests>=2.31
+python-dateutil>=2.8

@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: carboncast-api
+    runtime: python
+    rootDir: UCSC_CarbonCast_API/CarbonCast/src/CarbonCastAPI
+    buildCommand: pip install -r requirements-render.txt
+    startCommand: gunicorn CarbonCastAPI.wsgi:application --bind 0.0.0.0:$PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.14
+      - key: DJANGO_DEBUG
+        value: "False"
+      - key: DJANGO_ALLOWED_HOSTS
+        value: "*"
+      - key: DATABASE_URL
+        sync: false

@@ -1,10 +1,15 @@
-import React, { useMemo, memo, useCallback } from 'react'
+import React, { useState, useMemo, memo, useCallback } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import Logo from './Logo'
 import { useEnergyMix, useCarbonIntensityHistory } from '../hooks/useEnergyData'
 import { type TimelineState, useCarbonIntensityData } from '../hooks/cache'
 import { getRegionDisplayName, convertToApiRegionCode, getDisplayZoneId } from '../utils/regionMapping'
 import { setHoveredZone } from './InfoPopover'
+import WeeklyCarbonIntensityChart from './WeeklyCarbonIntensityChart'
+import ModelValidationModal from './ModelValidationModal'
+// Feature flag: set to true to restore the 24h Horizon view and switcher toggle once backend bugs are resolved
+export const SHOW_24H_VIEW = false
+
 // Extract defaultTimelineState to prevent object recreation
 const defaultTimelineState: TimelineState = {
   mode: 'now',
@@ -787,13 +792,36 @@ const CarbonIntensityChart = ({ regionCode, timelineState }: { regionCode: strin
     }
   }, [loading])
   
+  const isRealTime = !timelineState || timelineState.mode === 'now'
+  const currentHour = new Date().getHours()
+
+  // In Real-Time mode, the Actual line must only plot hours up to and including the current real-world hour.
+  // Hours after "now" should not appear on the Actual line at all (the line should stop, not continue as a flat value).
+  const filteredActual = useMemo(() => {
+    if (!actual || actual.length === 0) return []
+    return actual.filter(d => {
+      const hour = parseInt(d.time, 10)
+      if (isNaN(hour)) return false
+      // In real-time mode, only allow hours <= currentHour
+      if (isRealTime && hour > currentHour) return false
+      // Exclude null/undefined/NaN
+      return d.value !== null && d.value !== undefined && !isNaN(d.value)
+    })
+  }, [actual, isRealTime, currentHour])
+
+  // Dynamic Y-axis ceiling: based on actual and forecast values (min 100, 15% headroom)
   const maxValue = useMemo(() => {
-    const allValues = [...actual.map(d => d.value), ...forecast.map(d => d.value)]
-    return Math.max(700, Math.ceil(Math.max(...allValues) / 100) * 100)
-  }, [actual, forecast])
+    const allValues = [
+      ...filteredActual.map(d => d.value),
+      ...forecast.map(d => d.value)
+    ].filter(v => v !== null && v !== undefined && !isNaN(v) && v > 0)
+    if (allValues.length === 0) return 100
+    const maxVal = Math.max(...allValues)
+    return Math.max(100, Math.ceil(maxVal * 1.15 / 50) * 50)
+  }, [filteredActual, forecast])
 
   // Determine if we truly have no data
-  const hasNoData = (!loading && actual.length === 0 && forecast.length === 0) ||
+  const hasNoData = (!loading && filteredActual.length === 0 && forecast.length === 0) ||
                     (loading && loadingTimeout) ||
                     error?.includes('No data available')
 
@@ -848,7 +876,7 @@ const CarbonIntensityChart = ({ regionCode, timelineState }: { regionCode: strin
         </div>
       )}
       
-      {!hasNoData && !loading && !error && (actual.length > 0 || forecast.length > 0) && (
+      {!hasNoData && !loading && !error && (filteredActual.length > 0 || forecast.length > 0) && (
         <div style={{
           height: '200px',
           position: 'relative',
@@ -871,13 +899,15 @@ const CarbonIntensityChart = ({ regionCode, timelineState }: { regionCode: strin
             ))}
             
             {/* Actual data line */}
-            {actual.length > 0 && (
+            {filteredActual.length > 0 && (
               <polyline
                 fill="none"
                 stroke="#3B82F6"
                 strokeWidth="2"
-                points={actual.map((d, i) => {
-                  const x = 30 + (i * 250 / 24)
+                points={filteredActual.map((d, i) => {
+                  const hour = parseInt(d.time, 10)
+                  const hourIndex = isNaN(hour) ? i : hour
+                  const x = 30 + (hourIndex * 250 / 24)
                   const y = 160 - (d.value / maxValue * 160)
                   return `${x},${y}`
                 }).join(' ')}
@@ -892,7 +922,9 @@ const CarbonIntensityChart = ({ regionCode, timelineState }: { regionCode: strin
                 strokeWidth="2"
                 strokeDasharray="5,5"
                 points={forecast.map((d, i) => {
-                  const x = 30 + (i * 250 / 24)
+                  const hour = parseInt(d.time, 10)
+                  const hourIndex = isNaN(hour) ? i : hour
+                  const x = 30 + (hourIndex * 250 / 24)
                   const y = 160 - (d.value / maxValue * 160)
                   return `${x},${y}`
                 }).join(' ')}
@@ -1147,6 +1179,8 @@ const LeftPanelEM = ({ onClose, timelineState, region: regionProp }: {
   region?: string;
 }) => {
   const { region: urlRegion } = useParams()
+  const [forecastHorizon, setForecastHorizon] = useState<'24h' | '168h'>(SHOW_24H_VIEW ? '24h' : '168h')
+  const [validationModalOpen, setValidationModalOpen] = useState(false)
   
   // Use prop region if provided, otherwise fall back to URL param
   const region = regionProp || urlRegion
@@ -1199,7 +1233,98 @@ const LeftPanelEM = ({ onClose, timelineState, region: regionProp }: {
             <DisplayByEmissionToggle />
             <CarbonIntensityIndicator regionCode={region} timelineState={timelineState} />
             <ElectricityMixCard regionCode={region} timelineState={timelineState} />
-            <CarbonIntensityChart regionCode={region} timelineState={timelineState} />
+
+            {/* Horizon Switcher Tabs (gated behind SHOW_24H_VIEW) */}
+            {SHOW_24H_VIEW && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '0.75rem',
+                marginTop: '1rem',
+                padding: '0.25rem',
+                borderRadius: '0.5rem',
+                background: 'rgba(255, 255, 255, 0.04)',
+                border: '1px solid rgba(255, 255, 255, 0.08)'
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setForecastHorizon('24h')}
+                  style={{
+                    flex: 1,
+                    padding: '0.35rem 0.5rem',
+                    fontSize: '0.75rem',
+                    fontWeight: forecastHorizon === '24h' ? 600 : 500,
+                    color: forecastHorizon === '24h' ? '#FFFFFF' : 'rgba(255, 255, 255, 0.6)',
+                    background: forecastHorizon === '24h' ? 'rgba(255, 255, 255, 0.12)' : 'transparent',
+                    border: 'none',
+                    borderRadius: '0.375rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  24h Horizon
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForecastHorizon('168h')}
+                  style={{
+                    flex: 1,
+                    padding: '0.35rem 0.5rem',
+                    fontSize: '0.75rem',
+                    fontWeight: forecastHorizon === '168h' ? 600 : 500,
+                    color: forecastHorizon === '168h' ? '#10B981' : 'rgba(255, 255, 255, 0.6)',
+                    background: forecastHorizon === '168h' ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
+                    border: 'none',
+                    borderRadius: '0.375rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  7-Day (168h) Horizon
+                </button>
+              </div>
+            )}
+
+            {SHOW_24H_VIEW && forecastHorizon === '24h' ? (
+              <CarbonIntensityChart regionCode={region} timelineState={timelineState} />
+            ) : (
+              <WeeklyCarbonIntensityChart regionCode={region} />
+            )}
+
+            {/* Model Validation Button */}
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.75rem', marginBottom: '0.5rem' }}>
+              <button
+                type="button"
+                onClick={() => setValidationModalOpen(true)}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.06)',
+                  border: '1px solid rgba(255, 255, 255, 0.14)',
+                  borderRadius: '8px',
+                  color: 'var(--panelText)',
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                  padding: '6px 14px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.15s ease',
+                  boxShadow: '0 2px 6px rgba(0, 0, 0, 0.06)'
+                }}
+                title="View ML Model Test Evaluation Data"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M3 3v18h18" />
+                  <path d="m19 9-5 5-4-4-3 3" />
+                </svg>
+                View Model Validation
+              </button>
+            </div>
+
+            {validationModalOpen && (
+              <ModelValidationModal regionCode={region} onClose={() => setValidationModalOpen(false)} />
+            )}
           </div>
         </section>
       </div>
