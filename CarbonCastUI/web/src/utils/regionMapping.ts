@@ -17,6 +17,7 @@ export const regionNames: Record<string, string> = {
   'ES': 'Spain',
   'IT': 'Italy',
   'PL': 'Poland',
+  'AL': 'Albania',
   // Sweden display names
   'SE': 'Sweden',
   'SE-SE1': 'Sweden',
@@ -185,6 +186,7 @@ export const apiToMapRegionMapping: Record<string, string> = {
   'ON': 'CA-ON',
   'CA-ON': 'CA-ON',
   // European regions (already work with 2-letter codes but adding some mappings)
+  'AL': 'AL',
   'AT': 'AT',
   'BE': 'BE',
   'BG': 'BG',

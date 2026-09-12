@@ -14,6 +14,7 @@ import TopControls from './components/TopControls'
 import AppSidebar from './components/AppSidebar'
 import LeftPanelEM from './components/LeftPanelEM'
 import DataStatusIndicator, { type FallbackInfo } from './components/DataStatusIndicator'
+import CoverageView from './components/CoverageView'
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
       <Route path="/" element={<Navigate to="/map" replace />} />
       <Route path="/map" element={<MainView />} />
       <Route path="/zone/:region" element={<ZoneRoute />} />
+      <Route path="/coverage" element={<CoverageView />} />
     </Routes>
   )
 }
@@ -143,21 +145,21 @@ function MainView({ region }: { region?: string }) {
   // Track previous timeline state for debugging
   const prevTimelineStateRef = useRef<TimelineState | null>(null)
   
-  // 🔴🔴🔴 Store previous date to detect actual changes
-  const prevDateRef = useRef<string>(timelineState.date)
+  // 🔴🔴🔴 Store previous date and mode to detect actual changes
+  const prevDateModeRef = useRef<string>(`${timelineState.mode}-${timelineState.date}`)
   
-  // CRITICAL FIX: Watch for timelineState.date changes and force LeftPanelEM refresh
-  // This ensures the panel updates immediately when user selects a new date while panel is open
+  // CRITICAL FIX: Watch for timelineState.date and mode changes and force LeftPanelEM refresh
+  // This ensures the panel updates immediately when user selects a new date or switches mode while panel is open
   useEffect(() => {
-    const prevDate = prevDateRef.current
+    const currentKey = `${timelineState.mode}-${timelineState.date}`
     
-    // Only increment if date actually changed (not on initial mount with same date)
-    if (prevDate !== timelineState.date) {
+    // Only increment if date or mode actually changed
+    if (prevDateModeRef.current !== currentKey) {
       setLeftPanelForceKey(prev => prev + 1)
     }
     
-    prevDateRef.current = timelineState.date
-  }, [timelineState.date])
+    prevDateModeRef.current = currentKey
+  }, [timelineState.mode, timelineState.date])
   
   // SIMPLIFIED: Just pass state changes through
   // backgroundLoading from cache hook handles showing/hiding the overlay automatically

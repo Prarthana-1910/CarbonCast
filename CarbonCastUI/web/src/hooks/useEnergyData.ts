@@ -3,7 +3,7 @@ import type { TimelineState } from './cache'
 import { convertToApiRegionCode } from '../utils/regionMapping'
 
 // Use environment variable for API URL, fallback to localhost for development
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+const API_BASE = import.meta.env.VITE_API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8000')
 
 // Reduced cache TTL for real-time updates - only cache for 30 seconds
 const memoryCache = new Map<string, { data: any; metadata?: any; timestamp: number }>()
@@ -133,6 +133,7 @@ export function useEnergyMix(regionCode: string | undefined, timelineState?: Tim
   const [fallbackInfo, setFallbackInfo] = useState<{ used: boolean; message?: string } | null>(null)
   const previousRegionRef = useRef<string | undefined>(undefined)
   const previousDateRef = useRef<string | undefined>(undefined)
+  const previousModeRef = useRef<string | undefined>(undefined)
   const backgroundLoadingRef = useRef<boolean>(false)
 
   useEffect(() => {
@@ -145,9 +146,11 @@ export function useEnergyMix(regionCode: string | undefined, timelineState?: Tim
     // Don't clear cache when region changes - keep it for quick switching
     previousRegionRef.current = regionCode
 
-    // Detect if date changed for progressive loading
-    const dateChanged = previousDateRef.current && previousDateRef.current !== timelineState?.date
+    // Detect if date or mode changed for progressive loading
+    const dateChanged = (previousDateRef.current !== undefined && previousDateRef.current !== timelineState?.date) ||
+                        (previousModeRef.current !== undefined && previousModeRef.current !== timelineState?.mode)
     previousDateRef.current = timelineState?.date
+    previousModeRef.current = timelineState?.mode
 
     // Create AbortController for this request
     const abortController = new AbortController()
@@ -499,6 +502,7 @@ export function useCarbonIntensityHistory(regionCode: string | undefined, timeli
   const [fallbackInfo, setFallbackInfo] = useState<{ used: boolean; message?: string } | null>(null)
   const previousRegionRef = useRef<string | undefined>(undefined)
   const previousDateRef = useRef<string | undefined>(undefined)
+  const previousModeRef = useRef<string | undefined>(undefined)
   const lastDataRef = useRef<{ actual: CarbonIntensityData[], forecast: CarbonIntensityData[] }>({ actual: [], forecast: [] })
 
   useEffect(() => {
@@ -514,9 +518,11 @@ export function useCarbonIntensityHistory(regionCode: string | undefined, timeli
     }
     previousRegionRef.current = regionCode
 
-    // Detect if date changed for progressive loading
-    const dateChanged = previousDateRef.current && previousDateRef.current !== timelineState?.date
+    // Detect if date or mode changed
+    const dateChanged = (previousDateRef.current !== undefined && previousDateRef.current !== timelineState?.date) ||
+                        (previousModeRef.current !== undefined && previousModeRef.current !== timelineState?.mode)
     previousDateRef.current = timelineState?.date
+    previousModeRef.current = timelineState?.mode
 
     // Create AbortController for this request
     const abortController = new AbortController()
@@ -524,6 +530,13 @@ export function useCarbonIntensityHistory(regionCode: string | undefined, timeli
     const fetchCarbonHistory = async () => {
       setLoading(true)
       setError(null)
+      
+      // Clear previous data immediately on date/mode change so old chart points don't linger
+      if (dateChanged) {
+        setActual([])
+        setForecast([])
+        lastDataRef.current = { actual: [], forecast: [] }
+      }
       
       try {
         const apiRegionCode = convertToApiRegionCode(regionCode)
@@ -556,7 +569,6 @@ export function useCarbonIntensityHistory(regionCode: string | undefined, timeli
           const actualResult = await actualResponse.json()
           
           // Check for fallback metadata
-          // Backend returns: overall_fallback, lifecycle_actual_date, direct_actual_date, requested_date
           if (actualResult.metadata?.overall_fallback) {
             const actualDate = actualResult.metadata.direct_actual_date || actualResult.metadata.lifecycle_actual_date
             setFallbackInfo({
@@ -568,17 +580,28 @@ export function useCarbonIntensityHistory(regionCode: string | undefined, timeli
           }
           
           if (actualResult.data && actualResult.data.length > 0) {
-            // Initialize array with empty data for all 24 hours
-            const actualData: CarbonIntensityData[] = Array.from({ length: 24 }, (_, i) => ({
-              time: `${i}:00`,
-              value: 0
-            }))
-            
-            // Set priority hour data
-            const hourData = actualResult.data[0]
-            actualData[priorityHour] = {
-              time: `${priorityHour}:00`,
-              value: hourData.carbon_intensity_avg_direct || hourData.carbon_intensity_avg_lifecycle || 0
+            const isNowMode = !timelineState || timelineState.mode === 'now'
+            const currentHour = new Date().getHours()
+            const actualData: CarbonIntensityData[] = []
+
+            if (isNowMode) {
+              // In real-time mode, only add priority hour if <= current real-world hour
+              if (priorityHour <= currentHour) {
+                const hourData = actualResult.data[0]
+                const val = hourData.carbon_intensity_avg_direct ?? hourData.carbon_intensity_avg_lifecycle ?? 0
+                actualData.push({
+                  time: `${priorityHour}:00`,
+                  value: typeof val === 'number' ? val : parseFloat(String(val)) || 0
+                })
+              }
+            } else {
+              // Historical/future mode: set priority hour
+              const hourData = actualResult.data[0]
+              const val = hourData.carbon_intensity_avg_direct ?? hourData.carbon_intensity_avg_lifecycle ?? 0
+              actualData.push({
+                time: `${priorityHour}:00`,
+                value: typeof val === 'number' ? val : parseFloat(String(val)) || 0
+              })
             }
             
             // Force new array reference for React to detect change
@@ -586,8 +609,14 @@ export function useCarbonIntensityHistory(regionCode: string | undefined, timeli
               setActual([...actualData])
               lastDataRef.current.actual = actualData
             }
-            setLoading(false) // Stop loading after first data
+            setLoading(false)
+          } else {
+            setActual([])
+            lastDataRef.current.actual = []
           }
+        } else {
+          setActual([])
+          lastDataRef.current.actual = []
         }
         
         // Process priority hour forecast data
@@ -595,25 +624,25 @@ export function useCarbonIntensityHistory(regionCode: string | undefined, timeli
           const forecastResult = await forecastResponse.json()
           
           if (forecastResult.data && forecastResult.data.length > 0) {
-            // Initialize array with empty data for all 24 hours
-            const forecastData: CarbonIntensityData[] = Array.from({ length: 24 }, (_, i) => ({
-              time: `${i}:00`,
-              value: 0
-            }))
-            
-            // Set priority hour data
             const hourData = forecastResult.data[0]
-            forecastData[priorityHour] = {
+            const val = hourData.forecasted_avg_carbon_intensity_direct ?? hourData.carbon_intensity_avg_direct ?? hourData.carbon_intensity_avg_lifecycle ?? 0
+            const forecastData: CarbonIntensityData[] = [{
               time: `${priorityHour}:00`,
-              value: hourData.forecasted_avg_carbon_intensity_direct || hourData.carbon_intensity_avg_direct || 0
-            }
+              value: typeof val === 'number' ? val : parseFloat(String(val)) || 0
+            }]
             
             // Force new array reference for React to detect change
             if (JSON.stringify(forecastData) !== JSON.stringify(lastDataRef.current.forecast)) {
               setForecast([...forecastData])
               lastDataRef.current.forecast = forecastData
             }
+          } else {
+            setForecast([])
+            lastDataRef.current.forecast = []
           }
+        } else {
+          setForecast([])
+          lastDataRef.current.forecast = []
         }
         
         // Now fetch remaining hours in background
@@ -623,63 +652,135 @@ export function useCarbonIntensityHistory(regionCode: string | undefined, timeli
           const fullForecastUrl = `${API_BASE}/v1/CarbonIntensityForecastsHistory?region_code=${apiRegionCode}&date=${timelineState.date}`
           
           Promise.all([
-            fetch(fullActualUrl),
-            fetch(fullForecastUrl)
+            fetch(fullActualUrl, { signal: abortController.signal }),
+            fetch(fullForecastUrl, { signal: abortController.signal })
           ]).then(async ([actualRes, forecastRes]) => {
             if (actualRes.ok) {
               const actualResult = await actualRes.json()
               if (actualResult.data && actualResult.data.length > 0) {
-                const actualData: CarbonIntensityData[] = []
-                for (let i = 0; i < Math.min(24, actualResult.data.length); i++) {
-                  const hourData = actualResult.data[i]
-                  actualData.push({
-                    time: `${i}:00`,
-                    value: hourData.carbon_intensity_avg_direct || hourData.carbon_intensity_avg_lifecycle || 0
-                  })
-                }
-                // Force new array reference for React to detect change
+                const actualData: CarbonIntensityData[] = actualResult.data.slice(0, 24).map((item: Record<string, unknown>, index: number) => {
+                  let hour = index
+                  if (item['UTC time'] && typeof item['UTC time'] === 'string') {
+                    const parsed = new Date(item['UTC time']).getUTCHours()
+                    if (!isNaN(parsed)) hour = parsed
+                  }
+                  const val = item.carbon_intensity_avg_direct ?? item.carbon_intensity_avg_lifecycle ?? 0
+                  return {
+                    time: `${hour}:00`,
+                    value: typeof val === 'number' ? val : parseFloat(String(val)) || 0
+                  }
+                })
                 if (JSON.stringify(actualData) !== JSON.stringify(lastDataRef.current.actual)) {
                   setActual([...actualData])
                   lastDataRef.current.actual = actualData
                 }
+              } else {
+                setActual([])
+                lastDataRef.current.actual = []
               }
+            } else {
+              setActual([])
+              lastDataRef.current.actual = []
             }
             
             if (forecastRes.ok) {
               const forecastResult = await forecastRes.json()
               if (forecastResult.data && forecastResult.data.length > 0) {
-                const forecastData: CarbonIntensityData[] = forecastResult.data.slice(0, 24).map((item: Record<string, unknown>, index: number) => ({
-                  time: `${index}:00`,
-                  value: item.forecasted_avg_carbon_intensity_direct || item.carbon_intensity_avg_direct || 0
-                }))
-                // Force new array reference for React to detect change
+                const forecastData: CarbonIntensityData[] = forecastResult.data.slice(0, 24).map((item: Record<string, unknown>, index: number) => {
+                  let hour = index
+                  if (item['UTC time'] && typeof item['UTC time'] === 'string') {
+                    const parsed = new Date(item['UTC time']).getUTCHours()
+                    if (!isNaN(parsed)) hour = parsed
+                  }
+                  const val = item.forecasted_avg_carbon_intensity_direct ?? item.carbon_intensity_avg_direct ?? item.carbon_intensity_avg_lifecycle ?? 0
+                  return {
+                    time: `${hour}:00`,
+                    value: typeof val === 'number' ? val : parseFloat(String(val)) || 0
+                  }
+                })
                 if (JSON.stringify(forecastData) !== JSON.stringify(lastDataRef.current.forecast)) {
                   setForecast([...forecastData])
                   lastDataRef.current.forecast = forecastData
                 }
+              } else {
+                setForecast([])
+                lastDataRef.current.forecast = []
               }
+            } else {
+              setForecast([])
+              lastDataRef.current.forecast = []
             }
-          }).catch(() => {}) // Silent background fetch error
+            setLoading(false)
+          }).catch(() => {
+            setLoading(false)
+          })
         } else {
-          // For 'now' mode, fetch full 24h forecast
-          fetch(`${API_BASE}/v1/CarbonIntensityForecasts?regionCode=${apiRegionCode}&forecastPeriod=24h`)
-            .then(async (res) => {
-              if (res.ok) {
-                const result = await res.json()
+          // For 'now' mode: fetch full 24h forecast AND today's actual history
+          const forecastPromise = fetch(`${API_BASE}/v1/CarbonIntensityForecasts?regionCode=${apiRegionCode}&forecastPeriod=24h`, { signal: abortController.signal })
+          const actualHistoryPromise = fetch(`${API_BASE}/v1/CarbonIntensityHistory?region_code=${apiRegionCode}&date=${timelineState?.date || new Date().toISOString().split('T')[0]}`, { signal: abortController.signal })
+
+          Promise.all([forecastPromise, actualHistoryPromise])
+            .then(async ([forecastRes, actualHistoryRes]) => {
+              if (forecastRes.ok) {
+                const result = await forecastRes.json()
                 if (result.data && result.data.length > 0) {
-                  const forecastData: CarbonIntensityData[] = result.data.slice(0, 24).map((item: Record<string, unknown>, index: number) => ({
-                    time: `${index}:00`,
-                    value: item.forecasted_avg_carbon_intensity_direct || item.carbon_intensity_avg_direct || 0
-                  }))
-                  // Force new array reference for React to detect change
+                  const forecastData: CarbonIntensityData[] = result.data.slice(0, 24).map((item: Record<string, unknown>, index: number) => {
+                    let hour = index
+                    if (item['UTC time'] && typeof item['UTC time'] === 'string') {
+                      const parsed = new Date(item['UTC time']).getUTCHours()
+                      if (!isNaN(parsed)) hour = parsed
+                    }
+                    const val = item.forecasted_avg_carbon_intensity_direct ?? item.carbon_intensity_avg_direct ?? item.carbon_intensity_avg_lifecycle ?? 0
+                    return {
+                      time: `${hour}:00`,
+                      value: typeof val === 'number' ? val : parseFloat(String(val)) || 0
+                    }
+                  })
                   if (JSON.stringify(forecastData) !== JSON.stringify(lastDataRef.current.forecast)) {
                     setForecast([...forecastData])
                     lastDataRef.current.forecast = forecastData
                   }
+                } else {
+                  setForecast([])
+                  lastDataRef.current.forecast = []
+                }
+              } else {
+                setForecast([])
+                lastDataRef.current.forecast = []
+              }
+
+              // Check if today has actual history points
+              if (actualHistoryRes.ok) {
+                const actualHistoryResult = await actualHistoryRes.json()
+                if (actualHistoryResult.data && actualHistoryResult.data.length > 0) {
+                  const currentHour = new Date().getHours()
+                  const actualData: CarbonIntensityData[] = []
+                  for (const row of actualHistoryResult.data) {
+                    let hour = null
+                    if (row['UTC time'] && typeof row['UTC time'] === 'string') {
+                      hour = new Date(row['UTC time']).getUTCHours()
+                    }
+                    // Only include hours that have actually happened (<= currentHour)
+                    if (hour !== null && hour <= currentHour) {
+                      const val = row.carbon_intensity_avg_direct ?? row.carbon_intensity_avg_lifecycle ?? 0
+                      actualData.push({
+                        time: `${hour}:00`,
+                        value: typeof val === 'number' ? val : parseFloat(String(val)) || 0
+                      })
+                    }
+                  }
+                  if (actualData.length > 0 && JSON.stringify(actualData) !== JSON.stringify(lastDataRef.current.actual)) {
+                    setActual([...actualData])
+                    lastDataRef.current.actual = actualData
+                  }
                 }
               }
+
+              setLoading(false)
             })
-            .catch(() => {}) // Silent background fetch error
+            .catch(() => {
+              setLoading(false)
+            })
         }
         
       } catch (err) {
@@ -688,6 +789,8 @@ export function useCarbonIntensityHistory(regionCode: string | undefined, timeli
           return
         }
         setError(err instanceof Error ? err.message : 'Failed to fetch carbon intensity data')
+        setActual([])
+        setForecast([])
         setLoading(false)
       }
     }

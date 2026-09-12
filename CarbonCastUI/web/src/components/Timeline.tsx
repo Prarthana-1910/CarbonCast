@@ -294,9 +294,27 @@ const Timeline = memo(({
 
   const handleModeChange = (mode: 'past' | 'now' | 'future') => {
     if (isLocked) return // Don't change mode while loading
+    const today = getCurrentLocalDate()
+    let newDate = timelineState.date
+
+    if (mode === 'past') {
+      // If currently on today or future date, default to a sensible recent past date with full data
+      if (newDate >= today) {
+        newDate = addDays(today, -2) // Guaranteed complete 24h historical data for US and EU
+      }
+    } else if (mode === 'future') {
+      // If currently on today or past date, default to tomorrow
+      if (newDate <= today) {
+        newDate = addDays(today, 1)
+      }
+    } else if (mode === 'now') {
+      newDate = today
+    }
+
     onTimelineChange({
       ...timelineState,
-      mode
+      mode,
+      date: newDate
     })
   }
 
@@ -687,7 +705,9 @@ const Timeline = memo(({
             dropdownMode="select"
             dateFormat="yyyy-MM-dd"
             minDate={parseLocalDate('2020-01-01')}
-            maxDate={parseLocalDate(addDays(formatLocalDate(new Date()), 7))} // 7 days in future
+            maxDate={timelineState.mode === 'past'
+              ? parseLocalDate(addDays(getCurrentLocalDate(), -1))
+              : parseLocalDate(addDays(formatLocalDate(new Date()), 7))} // 7 days in future
           />
         </div>
       )}

@@ -45,7 +45,7 @@ const notifyCacheUpdate = (key: string) => {
 // Abort controllers for cancellable requests
 const abortControllers = new Map<string, AbortController>()
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+const API_BASE = import.meta.env.VITE_API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8000')
 
 // Cache management functions
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
