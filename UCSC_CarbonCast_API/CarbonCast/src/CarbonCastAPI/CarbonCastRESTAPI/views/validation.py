@@ -8,7 +8,22 @@ from rest_framework import status, permissions
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from ..consts import carbon_cast_version, authentication_classes, permission_classes
-from ._base import safe_float, check_throttle_limit
+try:
+    from ._base import safe_float, check_throttle_limit
+except ImportError:
+    def safe_float(val, default=None):
+        if val is None:
+            return default
+        try:
+            f = float(val)
+            if math.isnan(f) or math.isinf(f):
+                return default
+            return f
+        except (ValueError, TypeError):
+            return default
+
+    def check_throttle_limit(user):
+        return True
 
 
 class ForecastValidationApiView(APIView):

@@ -29,6 +29,26 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from datetime import datetime
 import time
+import math
+
+
+def safe_float(val, default=None):
+    """
+    Safely convert value to float, ensuring JSON compliance.
+    NaN and Inf are converted to default (None -> JSON null).
+    """
+    if val is None:
+        return default
+    try:
+        f = float(val)
+        if math.isnan(f) or math.isinf(f):
+            return default
+        return f
+    except (ValueError, TypeError):
+        return default
+
+
 def check_throttle_limit(user):
     # Rate limiting disabled - always allow requests
     return True
+
