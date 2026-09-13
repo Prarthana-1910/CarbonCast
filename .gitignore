@@ -14,6 +14,8 @@
 **/data_old (v2.1)/
 **/data_old(v3.1)/
 **/CI_forecast_data/
+!UCSC_CarbonCast_API/CarbonCast/src/CarbonCastAPI/CI_forecast_data/
+!UCSC_CarbonCast_API/CarbonCast/src/CarbonCastAPI/CI_forecast_data/**
 **/real_time/
 **/saved_first_tier_models/
 **/saved_second_tier_models/

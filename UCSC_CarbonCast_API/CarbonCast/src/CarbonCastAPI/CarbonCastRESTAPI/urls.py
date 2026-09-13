@@ -16,6 +16,7 @@ from .views import (
     VerifyOTP,
     DataFreshnessApiView,
     RetrainingStatusApiView,
+    ForecastValidationApiView,
 )
 
 urlpatterns = [
@@ -34,4 +35,5 @@ urlpatterns = [
     path('VerifyOTP', VerifyOTP.as_view()),
     path('DataFreshness', DataFreshnessApiView.as_view()),
     path('RetrainingStatus', RetrainingStatusApiView.as_view()),
+    path('ForecastValidation', ForecastValidationApiView.as_view()),
 ]
