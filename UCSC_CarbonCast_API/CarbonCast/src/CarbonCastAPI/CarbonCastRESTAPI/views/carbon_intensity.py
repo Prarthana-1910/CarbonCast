@@ -48,84 +48,97 @@ class CarbonIntensityApiView(APIView):
             fields = [
                  "UTC time", "creation_time (UTC)", "version", "region_code", "carbon_intensity_avg_lifecycle", 
                  "carbon_intensity_avg_direct", "cabon_intensity_unit"
-                 ]
+            ]
         
-            final_list=[]
+            final_list = []
         
-            for region_code in regions:
-                # Try cache first (short lived)
+            if region_code == 'all':
+                cache_key_all = "ci_latest_all_regions"
+                cached_all = cache.get(cache_key_all)
+                if cached_all:
+                    return Response({
+                        "data": cached_all,
+                        "carbon_cast_version": carbon_cast_version
+                    }, status=status.HTTP_200_OK)
+
+                # Fetch all regions in one single PostgreSQL DISTINCT ON query
+                latest_objs = EmissionActual.objects.filter(
+                    region__in=regions
+                ).order_by('region', '-ts').distinct('region')
+                latest_by_region = {obj.region: obj for obj in latest_objs}
+
+                for rc in regions:
+                    obj = latest_by_region.get(rc)
+                    if not obj:
+                        continue
+                    temp_dict = {
+                        fields[0]: obj.ts.isoformat(),
+                        fields[1]: obj.data.get("creation_time (UTC)") or obj.data.get("creation_time") or "",
+                        fields[2]: obj.data.get("version") or "",
+                        fields[3]: rc,
+                        fields[4]: float(obj.lifecycle) if obj.lifecycle is not None else float(
+                            obj.data.get("carbon_intensity_avg_lifecycle")
+                            or obj.data.get("carbon_intensity")
+                            or obj.data.get("lifecycle")
+                            or obj.data.get("value")
+                            or 0
+                        ),
+                        fields[5]: float(obj.direct) if obj.direct is not None else float(
+                            obj.data.get("carbon_intensity_avg_direct")
+                            or obj.data.get("carbon_intensity")
+                            or obj.data.get("direct")
+                            or obj.data.get("value")
+                            or 0
+                        ),
+                        fields[6]: obj.data.get("carbon_intensity_unit", "gCO2eg/kWh")
+                    }
+                    final_list.append(temp_dict)
+                    cache.set(f"ci_latest_{rc}", temp_dict, 60)
+
+                cache.set(cache_key_all, final_list, 60)
+                return Response({
+                    "data": final_list,
+                    "carbon_cast_version": carbon_cast_version
+                }, status=status.HTTP_200_OK)
+            else:
                 cache_key = f"ci_latest_{region_code}"
                 cached = cache.get(cache_key)
                 if cached:
-                    final_list.append(cached)
-                    continue
+                    return Response({
+                        "data": [cached],
+                        "carbon_cast_version": carbon_cast_version
+                    }, status=status.HTTP_200_OK)
 
-                # Query latest emission row for region
                 obj = EmissionActual.objects.filter(region=region_code).order_by('-ts').first()
-                if not obj:
-                    # fallback to CSV if DB has no data (preserve compatibility)
-                    try:
-                        csv_file1, csv_file2 = get_latest_csv_file(region_code)
-                        with open(csv_file1) as f1:
-                            last = None
-                            for line in f1:
-                                last = line
-                            values_csv1 = last.split(',') if last else []
-                        with open(csv_file2) as f2:
-                            last = None
-                            for line in f2:
-                                last = line
-                            values_csv2 = last.split(',') if last else []
-                        temp_dict = {
-                            fields[0]: values_csv1[1],
-                            fields[1]: values_csv1[2],
-                            fields[2]: values_csv1[3],
-                            fields[3]: region_code,
-                            fields[4]: float(values_csv1[4]) if len(values_csv1) > 4 else 0,
-                            fields[5]: float(values_csv2[4]) if len(values_csv2) > 4 else 0,
-                            fields[6]: "gCO2eg/kWh"
-                        }
-                        final_list.append(temp_dict)
-                        cache.set(cache_key, temp_dict, 10)
-                        continue
-                    except Exception:
-                        continue
+                if obj:
+                    temp_dict = {
+                        fields[0]: obj.ts.isoformat(),
+                        fields[1]: obj.data.get("creation_time (UTC)") or obj.data.get("creation_time") or "",
+                        fields[2]: obj.data.get("version") or "",
+                        fields[3]: region_code,
+                        fields[4]: float(obj.lifecycle) if obj.lifecycle is not None else float(
+                            obj.data.get("carbon_intensity_avg_lifecycle")
+                            or obj.data.get("carbon_intensity")
+                            or obj.data.get("lifecycle")
+                            or obj.data.get("value")
+                            or 0
+                        ),
+                        fields[5]: float(obj.direct) if obj.direct is not None else float(
+                            obj.data.get("carbon_intensity_avg_direct")
+                            or obj.data.get("carbon_intensity")
+                            or obj.data.get("direct")
+                            or obj.data.get("value")
+                            or 0
+                        ),
+                        fields[6]: obj.data.get("carbon_intensity_unit", "gCO2eg/kWh")
+                    }
+                    final_list.append(temp_dict)
+                    cache.set(cache_key, temp_dict, 60)
 
-                temp_dict = {
-                    fields[0]: obj.ts.isoformat(),
-                    fields[1]: obj.data.get("creation_time (UTC)") or obj.data.get("creation_time") or "",
-                    fields[2]: obj.data.get("version") or "",
-                    fields[3]: region_code,
-                    fields[4]: float(obj.lifecycle) if obj.lifecycle is not None else float(
-                        obj.data.get("carbon_intensity_avg_lifecycle")
-                        or obj.data.get("carbon_intensity")
-                        or obj.data.get("lifecycle")
-                        or obj.data.get("value")
-                        or 0
-                    ),
-                    fields[5]: float(obj.direct) if obj.direct is not None else float(
-                        obj.data.get("carbon_intensity_avg_direct")
-                        or obj.data.get("carbon_intensity")
-                        or obj.data.get("direct")
-                        or obj.data.get("value")
-                        or 0
-                    ),
-                    fields[6]: obj.data.get("carbon_intensity_unit", "gCO2eg/kWh")
-                }
-                cache.set(cache_key, temp_dict, 10)
-                final_list.append(temp_dict)
-                
-            response = {
-                "data": final_list
-            }
-            return Response(response, status=status.HTTP_200_OK)
-            final_list.append(temp_dict)
-            
-        response = {
-            "data": final_list,
-            "carbon_cast_version": carbon_cast_version
-        }
-        return Response(response, status=status.HTTP_200_OK)
+                return Response({
+                    "data": final_list,
+                    "carbon_cast_version": carbon_cast_version
+                }, status=status.HTTP_200_OK)
         
 #2    
 class CarbonIntensityHistoryApiView(APIView):
@@ -212,14 +225,42 @@ class CarbonIntensityHistoryApiView(APIView):
         if len(regions) > 1 and date_obj:  # Batch for any multiple regions
             print(f"[DEBUG] Using OPTIMIZED BATCH QUERY for {len(regions)} regions")
             
-            # Build optimized batch query - only fetch needed fields
+            from datetime import time as dtime, timezone as dtz
+            start_ts = datetime.combine(date_obj, dtime.min).replace(tzinfo=dtz.utc)
+            end_ts = datetime.combine(date_obj, dtime.max).replace(tzinfo=dtz.utc)
+            
+            # Build optimized batch query using indexed ts range
             base_query = EmissionActual.objects.filter(
                 region__in=regions,
-                ts__date=date_obj
-            ).only('region', 'ts', 'lifecycle', 'direct', 'data')  # Only fetch needed fields
+                ts__range=(start_ts, end_ts)
+            ).only('region', 'ts', 'lifecycle', 'direct', 'data')
             
             if hour_int is not None:
                 base_query = base_query.filter(ts__hour=hour_int)
+            
+            # DB FALLBACK: If requested date has no data in DB, find latest available date in DB
+            if not base_query.exists():
+                latest_ts = EmissionActual.objects.order_by('-ts').values_list('ts', flat=True).first()
+                if latest_ts:
+                    actual_date = latest_ts.date()
+                    fb_start = datetime.combine(actual_date, dtime.min).replace(tzinfo=dtz.utc)
+                    fb_end = datetime.combine(actual_date, dtime.max).replace(tzinfo=dtz.utc)
+                    base_query = EmissionActual.objects.filter(
+                        region__in=regions,
+                        ts__range=(fb_start, fb_end)
+                    ).only('region', 'ts', 'lifecycle', 'direct', 'data')
+                    if hour_int is not None:
+                        base_query = base_query.filter(ts__hour=hour_int)
+                    overall_metadata = {
+                        "overall_fallback": True,
+                        "lifecycle_fallback": True,
+                        "direct_fallback": True,
+                        "lifecycle_actual_date": str(actual_date),
+                        "direct_actual_date": str(actual_date),
+                        "requested_date": str(date_obj),
+                        "message": f"Data from {actual_date} (requested {date_obj})"
+                    }
+                    print(f"[DEBUG] Database fallback used: requested {date_obj}, using {actual_date}")
             
             # Use values_list with named=True for faster processing
             batch_results = base_query.order_by('region', 'ts').values_list(
@@ -262,8 +303,8 @@ class CarbonIntensityHistoryApiView(APIView):
                             field_names[1]: data_dict.get("creation_time (UTC)", "") or data_dict.get("creation_time", ""),
                             field_names[2]: data_dict.get("version", ""),
                             field_names[3]: region_code,
-                            field_names[4]: float(row_data.lifecycle) if row_data.lifecycle is not None else 0.0,
-                            field_names[5]: float(row_data.direct) if row_data.direct is not None else 0.0,
+                            field_names[4]: safe_float(row_data.lifecycle, 0.0),
+                            field_names[5]: safe_float(row_data.direct, 0.0),
                             field_names[6]: data_dict.get("carbon_intensity_unit", "gCO2eg/kWh")
                         }
                         temp_batch.append(temp_dict)
@@ -280,7 +321,6 @@ class CarbonIntensityHistoryApiView(APIView):
                     # No data in batch results, try CSV fallback
                     print(f"[DEBUG] No DB data for region {region_code}, trying CSV fallback")
                     regions_without_data.append(region_code)
-                    # CSV fallback code will be same as before
                     result = get_actual_value_file_by_date_with_metadata(region_code, date)
                     csv_file_a = result["lifecycle_file"]
                     csv_file_b = result["direct_file"]
@@ -288,6 +328,8 @@ class CarbonIntensityHistoryApiView(APIView):
                     if region_metadata and region_metadata.get("overall_fallback"):
                         overall_metadata = region_metadata
                     try:
+                        if not csv_file_a or not os.path.exists(csv_file_a) or not csv_file_b or not os.path.exists(csv_file_b):
+                            continue
                         with open(csv_file_a) as file:
                             lines_csv1 = file.readlines()
                         with open(csv_file_b) as file:
@@ -295,7 +337,10 @@ class CarbonIntensityHistoryApiView(APIView):
                         values_csv1 = [line.strip().split(',') for line in lines_csv1]
                         values_csv2 = [line.strip().split(',') for line in lines_csv2]
                         temp_batch = []
-                        for i in range(1, len(values_csv1)):
+                        min_len = min(len(values_csv1), len(values_csv2))
+                        for i in range(1, min_len):
+                            if len(values_csv1[i]) < 5 or len(values_csv2[i]) < 5:
+                                continue
                             if hour is not None:
                                 try:
                                     hour_int = int(hour)
@@ -312,8 +357,8 @@ class CarbonIntensityHistoryApiView(APIView):
                             temp_dict[field_names[1]] = values_csv1[i][2]
                             temp_dict[field_names[2]] = values_csv1[i][3]
                             temp_dict[field_names[3]] = region_code
-                            temp_dict[field_names[4]] = (values_csv1[i][4])
-                            temp_dict[field_names[5]] = (values_csv2[i][4])
+                            temp_dict[field_names[4]] = safe_float(values_csv1[i][4], 0.0)
+                            temp_dict[field_names[5]] = safe_float(values_csv2[i][4], 0.0)
                             temp_dict[field_names[6]] = "gCO2eg/kWh"
                             temp_batch.append(temp_dict)
                             final_list.append(temp_dict)
@@ -377,6 +422,8 @@ class CarbonIntensityHistoryApiView(APIView):
                     if region_metadata and region_metadata.get("overall_fallback"):
                         overall_metadata = region_metadata
                     try:
+                        if not csv_file_a or not os.path.exists(csv_file_a) or not csv_file_b or not os.path.exists(csv_file_b):
+                            continue
                         with open(csv_file_a) as file:
                             lines_csv1 = file.readlines()
                         with open(csv_file_b) as file:
@@ -385,7 +432,10 @@ class CarbonIntensityHistoryApiView(APIView):
                         values_csv2 = [line.strip().split(',') for line in lines_csv2]
                         # Create temp_batch for this region only
                         temp_batch = []
-                        for i in range(1, len(values_csv1)):
+                        min_len = min(len(values_csv1), len(values_csv2))
+                        for i in range(1, min_len):
+                            if len(values_csv1[i]) < 5 or len(values_csv2[i]) < 5:
+                                continue
                             # If hour parameter is specified, filter by hour
                             if hour is not None:
                                 try:
@@ -404,8 +454,8 @@ class CarbonIntensityHistoryApiView(APIView):
                             temp_dict[field_names[1]] = values_csv1[i][2]
                             temp_dict[field_names[2]] = values_csv1[i][3]
                             temp_dict[field_names[3]] = region_code
-                            temp_dict[field_names[4]] = (values_csv1[i][4])
-                            temp_dict[field_names[5]] = (values_csv2[i][4])
+                            temp_dict[field_names[4]] = safe_float(values_csv1[i][4], 0.0)
+                            temp_dict[field_names[5]] = safe_float(values_csv2[i][4], 0.0)
                             temp_dict[field_names[6]] = "gCO2eg/kWh"
                             temp_batch.append(temp_dict)
                             final_list.append(temp_dict)
@@ -428,8 +478,8 @@ class CarbonIntensityHistoryApiView(APIView):
                         field_names[1]: data_dict.get("creation_time (UTC)", "") or data_dict.get("creation_time", ""),
                         field_names[2]: data_dict.get("version", ""),
                         field_names[3]: region_code,
-                        field_names[4]: float(obj.lifecycle) if obj.lifecycle is not None else 0.0,
-                        field_names[5]: float(obj.direct) if obj.direct is not None else 0.0,
+                        field_names[4]: safe_float(obj.lifecycle, 0.0),
+                        field_names[5]: safe_float(obj.direct, 0.0),
                         field_names[6]: data_dict.get("carbon_intensity_unit", "gCO2eg/kWh")
                     }
                     temp_batch.append(temp_dict)
@@ -491,16 +541,16 @@ class CarbonIntensityHistoryApiView(APIView):
             "carbon_cast_version": carbon_cast_version,
         }
         
-        # Only add fallback_metadata if MAJORITY of regions needed fallback
-        # This prevents misleading warnings when only 1-2 out of 58 regions use fallback
-        if should_show_fallback_warning and overall_metadata:
-            response["fallback_metadata"] = {
-                "message": "Fallback date was used for majority of regions",
-                "requested_date": date,
+        # Attach fallback metadata when fallback date was used
+        is_fallback = should_show_fallback_warning or (overall_metadata and overall_metadata.get("overall_fallback", False))
+        if is_fallback and overall_metadata:
+            fallback_dict = {
+                "message": overall_metadata.get("message", "Fallback date was used for majority of regions"),
+                "requested_date": overall_metadata.get("requested_date", str(date)),
                 "lifecycle_actual_date": overall_metadata.get("lifecycle_actual_date"),
                 "direct_actual_date": overall_metadata.get("direct_actual_date"),
-                "lifecycle_fallback": overall_metadata.get("lifecycle_fallback"),
-                "direct_fallback": overall_metadata.get("direct_fallback"),
+                "lifecycle_fallback": overall_metadata.get("lifecycle_fallback", True),
+                "direct_fallback": overall_metadata.get("direct_fallback", True),
                 "overall_fallback": True,
                 "fallback_stats": {
                     "total_regions": total_regions_requested,
@@ -509,10 +559,12 @@ class CarbonIntensityHistoryApiView(APIView):
                     "fallback_percentage": round(fallback_percentage * 100, 1)
                 }
             }
+            response["fallback_metadata"] = fallback_dict
+            response["metadata"] = fallback_dict
             
         # Create response with appropriate headers
         http_response = Response(response, status=status.HTTP_200_OK)
-        if should_show_fallback_warning and overall_metadata:
+        if is_fallback and overall_metadata:
             http_response["X-Fallback-Used"] = "true"
             http_response["X-Actual-Date-Lifecycle"] = overall_metadata.get("lifecycle_actual_date", date)
             http_response["X-Actual-Date-Direct"] = overall_metadata.get("direct_actual_date", date)

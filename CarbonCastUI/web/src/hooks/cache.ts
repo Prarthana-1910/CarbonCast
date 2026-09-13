@@ -953,12 +953,12 @@ export const useCarbonIntensityData = (timelineState: TimelineState) => {
                 // Removed X-Priority header due to CORS issues
               })
               
-              // Add timeout for priority fetch (2 seconds max)
+              // Add timeout for priority fetch (20 seconds max for cloud network tolerance)
               const timeoutPromise = new Promise((_, reject) => {
                 setTimeout(() => {
                   priorityController.abort()
                   reject(new Error('Priority fetch timeout'))
-                }, 2000)
+                }, 20000)
               })
               
               const response = await Promise.race([fetchPromise, timeoutPromise]) as Response

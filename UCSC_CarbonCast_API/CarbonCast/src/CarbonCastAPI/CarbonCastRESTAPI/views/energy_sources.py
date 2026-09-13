@@ -44,64 +44,62 @@ class EnergySourcesApiView(APIView):
                 return Response({"error": "Invalid region code parameter"}, status=status.HTTP_400_BAD_REQUEST)
 
             fields = [
-                    "UTC time", "creation_time (UTC)", "version", "region_code", "coal", "nat_gas", "nuclear",
-                    "oil", "hydro", "solar", "wind", "other"
-                ]
+                "UTC time", "creation_time (UTC)", "version", "region_code", "coal", "nat_gas", "nuclear",
+                "oil", "hydro", "solar", "wind", "other"
+            ]
 
-            response = {"data": [], "carbon_cast_version": carbon_cast_version}  
+            final_list = []
 
-            for region_code in regions:
+            if region_code == 'all':
+                cache_key_all = "energy_latest_all_regions"
+                cached_all = cache.get(cache_key_all)
+                if cached_all:
+                    return Response({"data": cached_all, "carbon_cast_version": carbon_cast_version}, status=status.HTTP_200_OK)
+
+                latest_objs = EmissionActual.objects.filter(
+                    region__in=regions
+                ).order_by('region', '-ts').distinct('region')
+                latest_by_region = {obj.region: obj for obj in latest_objs}
+
+                for rc in regions:
+                    obj = latest_by_region.get(rc)
+                    if not obj:
+                        continue
+                    response_data = {
+                        "UTC time": obj.ts.isoformat(),
+                        "creation_time (UTC)": obj.data.get("creation_time (UTC)") or obj.data.get("creation_time") or "",
+                        "version": obj.data.get("version") or "",
+                        "region_code": rc,
+                    }
+                    for field in fields[4:]:
+                        response_data[field] = obj.data.get(field, "0")
+
+                    final_list.append(response_data)
+                    cache.set(f"energy_latest_{rc}", response_data, 60)
+
+                cache.set(cache_key_all, final_list, 60)
+                return Response({"data": final_list, "carbon_cast_version": carbon_cast_version}, status=status.HTTP_200_OK)
+            else:
                 cache_key = f"energy_latest_{region_code}"
                 cached = cache.get(cache_key)
                 if cached:
-                    response["data"].append(cached)
-                    continue
+                    return Response({"data": [cached], "carbon_cast_version": carbon_cast_version}, status=status.HTTP_200_OK)
 
                 obj = EmissionActual.objects.filter(region=region_code).order_by('-ts').first()
-                if not obj:
-                    # fallback to CSV
-                    try:
-                        csv_file1, csv_file2 = get_latest_csv_file(region_code)
-                        with open(csv_file1) as file:
-                            header = file.readline().strip()
-                            columns = header.split(',')
-                            line = None
-                            for row in file:
-                                line = row.strip().split(',')
-                        response_data = {}
-                        for field in fields:
-                            if field in columns:
-                                index = columns.index(field)
-                                value = line[index].strip() if index < len(line) else "0"
-                                response_data[field] = value
-                            elif field == "region_code":
-                                response_data[field] = region_code
-                            else:
-                                response_data[field] = "0"
-                        response["data"].append(response_data)
-                        cache.set(cache_key, response_data, 10)
-                        continue
-                    except Exception:
-                        continue
-
-                # Use stored JSON data for energy breakdown when available
-                response_data = {}
-                for field in fields:
-                    if field == "UTC time":
-                        response_data[field] = obj.ts.isoformat()
-                    elif field == "creation_time (UTC)":
-                        response_data[field] = obj.data.get("creation_time (UTC)") or obj.data.get("creation_time") or ""
-                    elif field == "version":
-                        response_data[field] = obj.data.get("version") or ""
-                    elif field == "region_code":
-                        response_data[field] = region_code
-                    else:
-                        # try to read energy source fields from stored JSON
+                if obj:
+                    response_data = {
+                        "UTC time": obj.ts.isoformat(),
+                        "creation_time (UTC)": obj.data.get("creation_time (UTC)") or obj.data.get("creation_time") or "",
+                        "version": obj.data.get("version") or "",
+                        "region_code": region_code,
+                    }
+                    for field in fields[4:]:
                         response_data[field] = obj.data.get(field, "0")
-                cache.set(cache_key, response_data, 10)
-                response["data"].append(response_data)
 
-            return Response(response, status=status.HTTP_200_OK)
+                    final_list.append(response_data)
+                    cache.set(cache_key, response_data, 60)
+
+                return Response({"data": final_list, "carbon_cast_version": carbon_cast_version}, status=status.HTTP_200_OK)
             
 
 #3 
@@ -170,154 +168,115 @@ class EnergySourcesHistoryApiView(APIView):
             except (ValueError, TypeError):
                 print(f"[DEBUG EnergySourcesHistory] Invalid hour parameter: {hour}")
         
+        # Parse date once
+        try:
+            from datetime import datetime, time as dtime, timezone as dtz
+            date_obj = datetime.strptime(date, "%Y-%m-%d").date() if date else None
+        except Exception:
+            date_obj = None
+
+        if not date_obj:
+            from datetime import datetime, time as dtime, timezone as dtz
+            date_obj = datetime.now().date()
+
+        from datetime import time as dtime, timezone as dtz
+        start_ts = datetime.combine(date_obj, dtime.min).replace(tzinfo=dtz.utc)
+        end_ts = datetime.combine(date_obj, dtime.max).replace(tzinfo=dtz.utc)
+
+        # Build base query
+        base_query = EmissionActual.objects.filter(
+            region__in=regions,
+            ts__range=(start_ts, end_ts)
+        ).only('region', 'ts', 'data')
+
+        if hour_int is not None:
+            base_query = base_query.filter(ts__hour=hour_int)
+
+        # Database fallback if no rows for requested date
+        if not base_query.exists():
+            latest_ts = EmissionActual.objects.order_by('-ts').values_list('ts', flat=True).first()
+            if latest_ts:
+                actual_date = latest_ts.date()
+                fb_start = datetime.combine(actual_date, dtime.min).replace(tzinfo=dtz.utc)
+                fb_end = datetime.combine(actual_date, dtime.max).replace(tzinfo=dtz.utc)
+                base_query = EmissionActual.objects.filter(
+                    region__in=regions,
+                    ts__range=(fb_start, fb_end)
+                ).only('region', 'ts', 'data')
+                if hour_int is not None:
+                    base_query = base_query.filter(ts__hour=hour_int)
+                overall_metadata = {
+                    "overall_fallback": True,
+                    "lifecycle_fallback": True,
+                    "direct_fallback": True,
+                    "lifecycle_actual_date": str(actual_date),
+                    "direct_actual_date": str(actual_date),
+                    "requested_date": str(date_obj),
+                    "message": f"Data from {actual_date} (requested {date_obj})"
+                }
+                print(f"[DEBUG EnergySourcesHistory] DB fallback used: requested {date_obj}, using {actual_date}")
+
+        from collections import defaultdict
+        region_data_map = defaultdict(list)
+        for obj in base_query.order_by('region', 'ts').iterator(chunk_size=1000):
+            region_data_map[obj.region].append(obj)
+
         for region_code in regions:
-            # Include hour in cache key when hour parameter is provided
             if hour is not None:
                 cache_key = f"energy_history_{region_code}_{date}_hour_{hour}"
             else:
                 cache_key = f"energy_history_{region_code}_{date}"
+
             cached = cache.get(cache_key)
             if cached:
                 final_list.extend(cached)
-                regions_from_db.append(region_code)  # Cached data was originally from DB
+                regions_from_db.append(region_code)
                 continue
 
-            try:
-                from datetime import datetime
-                date_obj = datetime.strptime(date, "%Y-%m-%d").date()
-                print(f"[DEBUG EnergySourcesHistory] Successfully parsed date: {date_obj} for region: {region_code}")
-            except Exception as e:
-                print(f"[DEBUG EnergySourcesHistory] Failed to parse date '{date}': {e}")
-                date_obj = None
-
-            if date_obj:
-                # Build base query
-                base_query = EmissionActual.objects.filter(region=region_code, ts__date=date_obj)
-                
-                # Apply hour filter if provided
-                if hour_int is not None:
-                    rows = base_query.filter(ts__hour=hour_int).order_by('ts')
-                    print(f"[DEBUG EnergySourcesHistory] Found {rows.count()} rows for {region_code} on {date_obj} hour {hour_int}")
-                else:
-                    rows = base_query.order_by('ts')
-                    print(f"[DEBUG EnergySourcesHistory] Found {rows.count()} rows for {region_code} on {date_obj} (all hours)")
-            else:
-                # Fix: Use default date instead of returning all data
-                from datetime import datetime
-                default_date = datetime.now().date()
-                print(f"[DEBUG EnergySourcesHistory] Using default date: {default_date}")
-                base_query = EmissionActual.objects.filter(region=region_code, ts__date=default_date)
-                
-                # Apply hour filter if provided
-                if hour_int is not None:
-                    rows = base_query.filter(ts__hour=hour_int).order_by('ts')
-                else:
-                    rows = base_query.order_by('ts')
-                print(f"[DEBUG EnergySourcesHistory] Found {rows.count()} rows for default date")
-
-            # Initialize metadata for this region
-            region_metadata = None
-            
-            if not rows.exists():
-                # fallback to CSV behavior with metadata
-                result = get_actual_value_file_by_date_with_metadata(region_code, date)
-                csv_file_a = result["lifecycle_file"]
-                csv_file_b = result["direct_file"]
-                region_metadata = result["metadata"]
-                # Track overall metadata across all regions
-                if region_metadata and region_metadata.get("overall_fallback"):
-                    overall_metadata = region_metadata
-                try:
-                    with open(csv_file_a) as file:
-                        lines_csv1 = file.readlines()
-                    with open(csv_file_b) as file:
-                        lines_csv2 = file.readlines()
-                    values_csv1 = [line.strip().split(',') for line in lines_csv1]
-                    temp_batch = []
-                    for i in range(1, len(values_csv1)):
-                        # If hour parameter is specified, filter by hour
-                        if hour is not None:
-                            try:
-                                # Extract hour from CSV timestamp (format: "YYYY-MM-DD HH:MM:SS")
-                                csv_timestamp = values_csv1[i][1]
-                                if ' ' in csv_timestamp:
-                                    csv_hour = int(csv_timestamp.split(' ')[1].split(':')[0])
-                                    if csv_hour != hour_int:
-                                        continue  # Skip this row if hour doesn't match
-                            except (ValueError, IndexError, TypeError):
-                                pass  # If can't parse hour, include the row
-                        
-                        temp_dict = {field: "0" for field in fields}
-                        temp_dict["UTC time"] = values_csv1[i][1]
-                        temp_dict["creation_time (UTC)"] = values_csv1[i][2]
-                        temp_dict["version"] = values_csv1[i][3]
-                        temp_dict["region_code"] = region_code
-
-                        for field in fields[2:]:
-                            if field in values_csv1[0]:
-                                index = values_csv1[0].index(field)
-                                temp_dict[field] = values_csv1[i][index]
-
-                        temp_batch.append(temp_dict)
-                        final_list.append(temp_dict)
-                    cache.set(cache_key, temp_batch, 10)
-                    if len(temp_batch) > 0:
-                        regions_from_csv.append(region_code)
-                    continue
-                except Exception:
-                    continue
-
-            temp_batch = []
-            for obj in rows:
-                temp_dict = {field: "0" for field in fields}
-                temp_dict["UTC time"] = obj.ts.isoformat()
-                temp_dict["creation_time (UTC)"] = obj.data.get("creation_time (UTC)") or obj.data.get("creation_time") or ""
-                temp_dict["version"] = obj.data.get("version") or ""
-                temp_dict["region_code"] = region_code
-                for field in fields[4:]:
-                    temp_dict[field] = obj.data.get(field, "0")
-                temp_batch.append(temp_dict)
-                final_list.append(temp_dict)
-            cache.set(cache_key, temp_batch, 10)
-            if len(temp_batch) > 0:
-                regions_from_db.append(region_code)
+            if region_code in region_data_map:
+                temp_batch = []
+                for obj in region_data_map[region_code]:
+                    temp_dict = {
+                        "UTC time": obj.ts.isoformat(),
+                        "creation_time (UTC)": obj.data.get("creation_time (UTC)") or obj.data.get("creation_time") or "",
+                        "version": obj.data.get("version") or "",
+                        "region_code": region_code,
+                    }
+                    for field in fields[4:]:
+                        temp_dict[field] = obj.data.get(field, "0")
+                    temp_batch.append(temp_dict)
+                    final_list.append(temp_dict)
+                cache.set(cache_key, temp_batch, 60)
+                if len(temp_batch) > 0:
+                    regions_from_db.append(region_code)
 
         # Calculate fallback percentage to determine if overall_fallback should be True
-        # Only set overall_fallback = True when MAJORITY (>50%) of regions needed fallback
         total_regions_requested = len(regions)
         fallback_count = len(regions_from_csv)
         db_count = len(regions_from_db)
         
-        # Calculate fallback percentage (regions using CSV fallback / total regions with data)
         regions_with_any_data = fallback_count + db_count
         if regions_with_any_data > 0:
             fallback_percentage = fallback_count / regions_with_any_data
         else:
             fallback_percentage = 0.0
         
-        # Determine if overall_fallback should be True based on majority threshold
         should_show_fallback_warning = fallback_percentage > 0.5
-        
-        print(f"[DEBUG EnergySourcesHistory] REGION SUMMARY:")
-        print(f"  - Requested regions: {total_regions_requested}")
-        print(f"  - Regions with data: {regions_with_any_data} ({db_count} from DB, {fallback_count} from CSV)")
-        print(f"  - Fallback percentage: {fallback_percentage:.1%} ({fallback_count}/{regions_with_any_data})")
-        print(f"  - Should show fallback warning: {should_show_fallback_warning}")
+        is_fallback = should_show_fallback_warning or (overall_metadata and overall_metadata.get("overall_fallback", False))
 
         response = {
             "data": final_list,
             "carbon_cast_version": carbon_cast_version
         }
         
-        # Only add fallback_metadata if MAJORITY of regions needed fallback
-        if should_show_fallback_warning and overall_metadata:
-            response["fallback_metadata"] = {
-                "message": "Fallback date was used for majority of regions",
-                "requested_date": date,
+        if is_fallback and overall_metadata:
+            fallback_dict = {
+                "message": overall_metadata.get("message", "Fallback date was used for majority of regions"),
+                "requested_date": overall_metadata.get("requested_date", str(date)),
                 "lifecycle_actual_date": overall_metadata.get("lifecycle_actual_date"),
                 "direct_actual_date": overall_metadata.get("direct_actual_date"),
-                "lifecycle_fallback": overall_metadata.get("lifecycle_fallback"),
-                "direct_fallback": overall_metadata.get("direct_fallback"),
+                "lifecycle_fallback": overall_metadata.get("lifecycle_fallback", True),
+                "direct_fallback": overall_metadata.get("direct_fallback", True),
                 "overall_fallback": True,
                 "fallback_stats": {
                     "total_regions": total_regions_requested,
@@ -326,10 +285,11 @@ class EnergySourcesHistoryApiView(APIView):
                     "fallback_percentage": round(fallback_percentage * 100, 1)
                 }
             }
+            response["fallback_metadata"] = fallback_dict
+            response["metadata"] = fallback_dict
             
-        # Create response with appropriate headers
         http_response = Response(response, status=status.HTTP_200_OK)
-        if should_show_fallback_warning and overall_metadata:
+        if is_fallback and overall_metadata:
             http_response["X-Fallback-Used"] = "true"
             http_response["X-Actual-Date-Lifecycle"] = overall_metadata.get("lifecycle_actual_date", date)
             http_response["X-Actual-Date-Direct"] = overall_metadata.get("direct_actual_date", date)
