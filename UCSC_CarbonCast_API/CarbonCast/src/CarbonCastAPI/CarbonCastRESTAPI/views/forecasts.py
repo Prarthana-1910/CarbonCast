@@ -50,97 +50,102 @@ class CarbonIntensityForecastsApiView(APIView):
         if cached:
             return Response({"data": cached, "carbon_cast_version": carbon_cast_version}, status=status.HTTP_200_OK)
 
-        from datetime import timedelta
-        from django.utils import timezone
-
-        from CarbonCastRESTAPI.models import Forecast168
-
-        forecast_floor = timezone.now() - timedelta(hours=6)  # real ML data refreshes daily, no need for a wide window
-
-        lifecycle_base = Forecast168.objects.filter(
-            region_code=region_code,
-            emission_factor_type='lifecycle',
-            datetime__gte=forecast_floor,
-        )
-        latest_run = (
-            lifecycle_base.exclude(forecast_run_id__isnull=True)
-            .exclude(forecast_run_id='')
-            .order_by('-issued_at')
-            .values_list('forecast_run_id', flat=True)
-            .first()
-        )
-        direct_base = Forecast168.objects.filter(
-            region_code=region_code,
-            emission_factor_type='direct',
-            datetime__gte=forecast_floor,
-        )
-        if latest_run:
-            lifecycle_base = lifecycle_base.filter(forecast_run_id=latest_run)
-            direct_base = direct_base.filter(forecast_run_id=latest_run)
-        lifecycle_qs = lifecycle_base.order_by('datetime')[:forecastPeriod]
-        direct_qs = direct_base.order_by('datetime')[:forecastPeriod]
         final_list = []
         forecast_metadata = None
 
-        if not lifecycle_qs.exists() and not direct_qs.exists():
-            # If no forecasts strictly after forecast_floor, retrieve the latest forecast run available for this region
-            fallback_run = (
-                Forecast168.objects.filter(region_code=region_code)
-                .exclude(forecast_run_id__isnull=True)
+        try:
+            from datetime import timedelta
+            from django.utils import timezone
+            from CarbonCastRESTAPI.models import Forecast168
+
+            forecast_floor = timezone.now() - timedelta(hours=6)  # real ML data refreshes daily, no need for a wide window
+
+            lifecycle_base = Forecast168.objects.filter(
+                region_code=region_code,
+                emission_factor_type='lifecycle',
+                datetime__gte=forecast_floor,
+            )
+            latest_run = (
+                lifecycle_base.exclude(forecast_run_id__isnull=True)
                 .exclude(forecast_run_id='')
                 .order_by('-issued_at')
                 .values_list('forecast_run_id', flat=True)
                 .first()
             )
-            if fallback_run:
-                lifecycle_qs = Forecast168.objects.filter(
-                    region_code=region_code,
-                    emission_factor_type='lifecycle',
-                    forecast_run_id=fallback_run,
-                ).order_by('datetime')[:forecastPeriod]
-                direct_qs = Forecast168.objects.filter(
-                    region_code=region_code,
-                    emission_factor_type='direct',
-                    forecast_run_id=fallback_run,
-                ).order_by('datetime')[:forecastPeriod]
-            else:
-                # If no forecast_run_id, get latest Forecast168 rows by datetime
-                lifecycle_qs = Forecast168.objects.filter(
-                    region_code=region_code,
-                    emission_factor_type='lifecycle',
-                ).order_by('-datetime')[:forecastPeriod]
-                direct_qs = Forecast168.objects.filter(
-                    region_code=region_code,
-                    emission_factor_type='direct',
-                ).order_by('-datetime')[:forecastPeriod]
+            direct_base = Forecast168.objects.filter(
+                region_code=region_code,
+                emission_factor_type='direct',
+                datetime__gte=forecast_floor,
+            )
+            if latest_run:
+                lifecycle_base = lifecycle_base.filter(forecast_run_id=latest_run)
+                direct_base = direct_base.filter(forecast_run_id=latest_run)
+            lifecycle_qs = lifecycle_base.order_by('datetime')[:forecastPeriod]
+            direct_qs = direct_base.order_by('datetime')[:forecastPeriod]
 
-        if not lifecycle_qs.exists() and not direct_qs.exists():
+            if not lifecycle_qs.exists() and not direct_qs.exists():
+                # If no forecasts strictly after forecast_floor, retrieve the latest forecast run available for this region
+                fallback_run = (
+                    Forecast168.objects.filter(region_code=region_code)
+                    .exclude(forecast_run_id__isnull=True)
+                    .exclude(forecast_run_id='')
+                    .order_by('-issued_at')
+                    .values_list('forecast_run_id', flat=True)
+                    .first()
+                )
+                if fallback_run:
+                    lifecycle_qs = Forecast168.objects.filter(
+                        region_code=region_code,
+                        emission_factor_type='lifecycle',
+                        forecast_run_id=fallback_run,
+                    ).order_by('datetime')[:forecastPeriod]
+                    direct_qs = Forecast168.objects.filter(
+                        region_code=region_code,
+                        emission_factor_type='direct',
+                        forecast_run_id=fallback_run,
+                    ).order_by('datetime')[:forecastPeriod]
+                else:
+                    # If no forecast_run_id, get latest Forecast168 rows by datetime
+                    lifecycle_qs = Forecast168.objects.filter(
+                        region_code=region_code,
+                        emission_factor_type='lifecycle',
+                    ).order_by('-datetime')[:forecastPeriod]
+                    direct_qs = Forecast168.objects.filter(
+                        region_code=region_code,
+                        emission_factor_type='direct',
+                    ).order_by('-datetime')[:forecastPeriod]
+
+            if lifecycle_qs.exists() or direct_qs.exists():
+                lifecycle_list = list(lifecycle_qs)
+                direct_list = list(direct_qs)
+                count = max(len(lifecycle_list), len(direct_list))
+                for i in range(count):
+                    l = lifecycle_list[i] if i < len(lifecycle_list) else None
+                    d = direct_list[i] if i < len(direct_list) else None
+                    primary = l or d
+                    temp_dict = {
+                        field_names[0]: primary.datetime.isoformat() if primary else "",
+                        field_names[1]: primary.issued_at.isoformat() if primary and primary.issued_at else "",
+                        field_names[2]: primary.provider or "",
+                        field_names[3]: region_code,
+                        field_names[4]: safe_float(l.value if l else None, 0.0),
+                        field_names[5]: safe_float(d.value if d else None, 0.0),
+                        field_names[6]: (primary.metric_unit if primary else "gCO2eg/kWh")
+                    }
+                    final_list.append(temp_dict)
+                cache.set(cache_key, final_list, 60)
+            else:
+                cache.set(cache_key, [], 10)
+        except Exception as exc:
+            print(f"[CarbonIntensityForecastsApiView] Error retrieving Forecast168 for region {region_code}: {exc}")
             final_list = []
-            cache.set(cache_key, final_list, 10)
-        else:
-            lifecycle_list = list(lifecycle_qs)
-            direct_list = list(direct_qs)
-            count = max(len(lifecycle_list), len(direct_list))
-            for i in range(count):
-                l = lifecycle_list[i] if i < len(lifecycle_list) else None
-                d = direct_list[i] if i < len(direct_list) else None
-                primary = l or d
-                temp_dict = {
-                    field_names[0]: primary.datetime.isoformat() if primary else "",
-                    field_names[1]: primary.issued_at.isoformat() if primary and primary.issued_at else "",
-                    field_names[2]: primary.provider or "",
-                    field_names[3]: region_code,
-                    field_names[4]: safe_float(l.value if l else None, 0.0),
-                    field_names[5]: safe_float(d.value if d else None, 0.0),
-                    field_names[6]: (primary.metric_unit if primary else "gCO2eg/kWh")
-                }
-                final_list.append(temp_dict)
-            cache.set(cache_key, final_list, 10)
+
         response = {
             "data": final_list,
             "carbon_cast_version": carbon_cast_version
         }
         return Response(response, status=status.HTTP_200_OK)
+
 
 #6
 class CarbonIntensityForecastsHistoryApiView(APIView):

@@ -158,3 +158,32 @@ class ModelRun(models.Model):
 
     def __str__(self):
         return f"{self.region} {self.model_name} {self.status} @ {self.run_started.isoformat()}"
+
+class Forecast168(models.Model):
+    """
+    Real ML-generated 168-hour carbon intensity forecasts, produced by the
+    trained ANN (tier 1) + CNN-LSTM (tier 2) models via CARBONCAST_RUN_ML=true.
+    Schema mirrors EnergyAPI's carbon_intensity_samples table so a future sync
+    job can map fields 1:1 without a schema redesign.
+    """
+    region_code = models.CharField(max_length=32, db_index=True)
+    datetime = models.DateTimeField(db_index=True)
+    issued_at = models.DateTimeField(db_index=True)
+    emission_factor_type = models.CharField(max_length=32)  # 'lifecycle' or 'direct'
+    value = models.FloatField()
+    metric_unit = models.CharField(max_length=32, default='gCO2eq/kWh')
+    source_type = models.CharField(max_length=32, default='model_forecast')
+    provider = models.CharField(max_length=32, default='carboncast')
+    forecast_run_id = models.CharField(max_length=64, db_index=True)
+    creation_time = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('region_code', 'datetime', 'source_type', 'emission_factor_type')
+        indexes = [
+            models.Index(fields=['region_code', 'datetime']),
+            models.Index(fields=['region_code', 'issued_at']),
+            models.Index(fields=['forecast_run_id']),
+        ]
+
+    def __str__(self):
+        return f"{self.region_code} {self.emission_factor_type} @ {self.datetime.isoformat()} -> {self.value}"
