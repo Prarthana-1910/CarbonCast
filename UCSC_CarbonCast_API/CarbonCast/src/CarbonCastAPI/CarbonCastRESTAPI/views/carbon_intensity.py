@@ -221,9 +221,9 @@ class CarbonIntensityHistoryApiView(APIView):
             except (ValueError, TypeError):
                 print(f"[DEBUG] Invalid hour parameter: {hour}")
         
-        # OPTIMIZATION: Batch query all regions at once when possible
-        if len(regions) > 1 and date_obj:  # Batch for any multiple regions
-            print(f"[DEBUG] Using OPTIMIZED BATCH QUERY for {len(regions)} regions")
+        # OPTIMIZATION: Query DB for all regions (single or multiple) using indexed ts range and DB date fallback
+        if len(regions) >= 1 and date_obj:
+            print(f"[DEBUG] Using OPTIMIZED DB QUERY for {len(regions)} regions")
             
             from datetime import time as dtime, timezone as dtz
             start_ts = datetime.combine(date_obj, dtime.min).replace(tzinfo=dtz.utc)
@@ -321,15 +321,18 @@ class CarbonIntensityHistoryApiView(APIView):
                     # No data in batch results, try CSV fallback
                     print(f"[DEBUG] No DB data for region {region_code}, trying CSV fallback")
                     regions_without_data.append(region_code)
-                    result = get_actual_value_file_by_date_with_metadata(region_code, date)
-                    csv_file_a = result["lifecycle_file"]
-                    csv_file_b = result["direct_file"]
-                    region_metadata = result["metadata"]
-                    if region_metadata and region_metadata.get("overall_fallback"):
-                        overall_metadata = region_metadata
                     try:
+                        result = get_actual_value_file_by_date_with_metadata(region_code, date)
+                        csv_file_a = result.get("lifecycle_file")
+                        csv_file_b = result.get("direct_file")
+                        region_metadata = result.get("metadata")
+                        if region_metadata and region_metadata.get("overall_fallback"):
+                            overall_metadata = region_metadata
                         if not csv_file_a or not os.path.exists(csv_file_a) or not csv_file_b or not os.path.exists(csv_file_b):
                             continue
+                    except Exception as e:
+                        print(f"[DEBUG] Error reading CSV metadata for region {region_code}: {e}")
+                        continue
                         with open(csv_file_a) as file:
                             lines_csv1 = file.readlines()
                         with open(csv_file_b) as file:
