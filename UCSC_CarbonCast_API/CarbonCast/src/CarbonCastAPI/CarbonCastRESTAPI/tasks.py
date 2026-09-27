@@ -163,3 +163,51 @@ def retrain_models(self):
         return result
     finally:
         django_cache.delete(lock_key)
+
+
+from celery import shared_task
+from django.utils import timezone as tz
+from datetime import timedelta
+import logging
+
+logger = logging.getLogger(__name__)
+
+ALL_WORKING_REGIONS = [
+    'AECI', 'AT', 'AZPS', 'BANC', 'BE', 'BG', 'BPAT', 'CH', 'CISO', 'CZ',
+    'DE', 'DK', 'DOPD', 'DUK', 'EE', 'EPE', 'ERCO', 'ES', 'FI', 'FMPP',
+    'FPC', 'FPL', 'FR', 'GCPD', 'GR', 'GRID', 'HR', 'HU', 'IE', 'IPCO',
+    'ISNE', 'IT', 'LDWP', 'LGEE', 'LT', 'LV', 'MISO', 'NEVP', 'NL', 'NWMT',
+    'NYIS', 'PACE', 'PACW', 'PGE', 'PL', "PJM",'PNM', 'PSCO', 'PSEI', 'PT', 'RO',
+    'RS', 'SC', 'SCEG', 'SCL', 'SE', 'SI', 'SK', 'SOCO', 'SRP', 'SWPP',
+    'TAL', 'TEC', 'TEPC', 'TIDC', 'TPWR', 'TVA', 'WALC',
+    # excluded: WACM (EIA data not exists), GB (schema mismatch), AL (EIA no longer supports)
+]
+
+
+@shared_task(bind=True, max_retries=1, default_retry_delay=600)
+def daily_inference_batch(self):
+    """
+    Runs daily CI inference for all trained regions. Includes grid-data
+    fetch internally (via run_pipeline's step1_fetch_electricity), so no
+    separate grid-fetch task is needed.
+    """
+    from CarbonCastRESTAPI.services.weather_fetch.run_daily_inference_batch import run_all
+    try:
+        return run_all()
+    except Exception as exc:
+        logger.exception("daily_inference_batch failed")
+        raise self.retry(exc=exc)
+
+
+@shared_task(bind=True, max_retries=1, default_retry_delay=1800)
+def weekly_retraining_batch(self):
+    """
+    Runs weekly retraining (rotate data, tier 1, tier 2) for all regions
+    in the retraining region list.
+    """
+    from CarbonCastRESTAPI.services.weather_fetch.run_full_retraining_batch import main as retrain_main
+    try:
+        return retrain_main()
+    except Exception as exc:
+        logger.exception("weekly_retraining_batch failed")
+        raise self.retry(exc=exc)

@@ -24,7 +24,7 @@ from django.db import transaction
 
 logger = logging.getLogger(__name__)
 
-KNOWN_VARIABLES = {'temp', 'wind', 'dswrf', 'rain'}
+KNOWN_VARIABLES = {'temp', 'wind', 'dswrf', 'rain','dpt'}
 VARIABLE_ALIASES = {
     'temp': 'temp',
     'tmp': 'temp',
@@ -40,6 +40,9 @@ VARIABLE_ALIASES = {
     'apcp': 'rain',
     'precip': 'rain',
     'rain': 'rain',
+    'dewpoint': 'dewpoint',
+    'dpt': 'dewpoint',
+    'dwpt': 'dewpoint',
 }
 
 

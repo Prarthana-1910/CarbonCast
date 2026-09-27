@@ -24,7 +24,16 @@ EIA_SOURCE_MAP = {
     "NUC": "nuclear",
     "WND": "wind",
     "WAT": "hydro",
+    "SNB": "solar",
     "OIL": "oil",
+    "OES":"other",
+    "WNB":"other",
+    "UNK":"other",
+    "UES": "other",   # Unknown Energy Storage (battery/pumped-hydro discharge)
+    "BAT": "other",   # Battery storage, in case this code also appears
+    "GEO": "other",   # Geothermal, in case it appears for some BAs
+    "MWH": "other",   # Some BAs code storage discharge as MWH
+    "PS": "other"     # Pumped storage, in case it appears
 }
 
 DIRECT_EMISSION_FACTORS = {
@@ -155,13 +164,13 @@ def _parse_hourly_records(data: list, region: str):
 
         source_name = EIA_SOURCE_MAP.get(fuel)
         if source_name:
-            hourly[ts_str][source_name] = value
-
+            hourly[ts_str][source_name] = (hourly[ts_str].get(source_name) or 0) + (value or 0)
     records = []
+    from django.utils.timezone import utc as _dj_utc
     for ts_str, sources in sorted(hourly.items()):
         try:
             dt = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
-            dt = make_aware(dt)
+            dt = make_aware(dt, _dj_utc)
         except Exception:
             continue
 

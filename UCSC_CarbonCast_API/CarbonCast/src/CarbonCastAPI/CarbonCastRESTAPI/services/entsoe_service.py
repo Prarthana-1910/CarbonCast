@@ -16,63 +16,131 @@ from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
+##########################################################################
+# Mapping from ENTSOE fuel names to CarbonCast names
+##########################################################################
+FUEL_MAP = {
+    "Biomass": "BIO",
+    "Waste": "BIO",
+
+    "Fossil Brown coal/Lignite": "COAL",
+    "Fossil Hard coal": "COAL",
+    "Fossil Coal-derived gas": "NG",
+    "Fossil Gas": "NG",
+    "Fossil Oil": "OIL",
+    "Fossil Oil shale": "COAL",
+    "Fossil Peat": "COAL",
+
+    "Geothermal": "GEO",
+
+    "Hydro Pumped Storage": "STOR",
+    "Hydro Run-of-river and poundage": "HYD",
+    "Hydro Water Reservoir": "HYD",
+
+    "Marine": "UNK",
+
+    "Nuclear": "NUC",
+
+    "Other": "UNK",
+    "Other renewable": "UNK",
+
+    "Solar": "SOL",
+
+    "Wind Offshore": "WND",
+    "Wind Onshore": "WND",
+
+    "Energy storage": "STOR",
+}
+
+##########################################################################
+# PSR mapping (backup)
+##########################################################################
+
 # ENTSO-E generation type code -> our internal source name.
 # Only codes that map onto EIA's source taxonomy are kept; everything else
 # is bucketed into "other" so downstream emission factors stay consistent.
 ENTSOE_PSR_TYPE_TO_SOURCE = {
-    "B01": "biomass",
-    "B02": "coal",       # Fossil Brown coal/Lignite
-    "B03": "coal",       # Fossil Coal-derived gas -> coal proxy
-    "B04": "nat_gas",    # Fossil Gas
-    "B05": "coal",       # Fossil Hard coal
-    "B06": "oil",        # Fossil Oil
-    "B07": "oil",        # Fossil Oil shale
-    "B08": "coal",       # Fossil Peat
-    "B09": "geothermal",
-    "B10": "hydro",      # Hydro Pumped Storage
-    "B11": "hydro",      # Hydro Run-of-river
-    "B12": "hydro",      # Hydro Water Reservoir
-    "B13": "other",      # Marine
-    "B14": "nuclear",
-    "B15": "other",      # Other renewable
-    "B16": "solar",
-    "B17": "other",      # Waste
-    "B18": "wind",       # Wind Offshore
-    "B19": "wind",       # Wind Onshore
-    "B20": "other",
-    "B25": "other",
+
+    "B01":"biomass",
+    "B02":"coal",
+    "B03":"coal",
+    "B04":"nat_gas",
+    "B05":"coal",
+    "B06":"oil",
+    "B07":"oil",
+    "B08":"coal",
+    "B09":"geothermal",
+    "B10":"hydro",
+    "B11":"hydro",
+    "B12":"hydro",
+    "B13":"other",
+    "B14":"nuclear",
+    "B15":"other",
+    "B16":"solar",
+    "B17":"other",
+    "B18":"wind",
+    "B19":"wind",
+    "B20":"other",
+    "B25":"other",
+}
+SOURCE_MAP = {
+    "BIO": "biomass",
+    "COAL": "coal",
+    "NG": "nat_gas",
+    "OIL": "oil",
+    "GEO": "geothermal",
+    "HYD": "hydro",
+    "NUC": "nuclear",
+    "SOL": "solar",
+    "WND": "wind",
+    "UNK": "other",
+
+    # storage isn't one of your output columns,
+    # so map it wherever you want
+    "STOR": "hydro",      # recommended
+    # or
+    # "STOR": "other"
 }
 
 # Region code (our internal) -> ENTSO-E control area EIC code.
 # Trimmed to the regions we already serve in `consts.US_region_codes`.
+
+##########################################################################
+# Area codes
+##########################################################################
+
 ENTSOE_AREA_CODES = {
-    "AT": "10YAT-APG------L",
-    "BE": "10YBE----------2",
-    "BG": "10YCA-BULGARIA-R",
-    "CH": "10YCH-SWISSGRIDZ",
-    "CZ": "10YCZ-CEPS-----N",
-    "DE": "10Y1001A1001A83F",
-    "DK": "10Y1001A1001A65H",
-    "EE": "10Y1001A1001A39I",
-    "ES": "10YES-REE------0",
-    "FI": "10YFI-1--------U",
-    "FR": "10YFR-RTE------C",
-    "GB": "10YGB----------A",
-    "GR": "10YGR-HTSO-----Y",
-    "HR": "10YHR-HEP------M",
-    "HU": "10YHU-MAVIR----U",
-    "IE": "10YIE-1001A00010",
-    "IT": "10YIT-GRTN-----B",
-    "LT": "10YLT-1001A0008Q",
-    "LV": "10YLV-1001A00074",
-    "NL": "10YNL----------L",
-    "PL": "10YPL-AREA-----S",
-    "PT": "10YPT-REN------W",
-    "RS": "10YCS-SERBIATSOV",
-    "SE": "10YSE-1--------K",
-    "SI": "10YSI-ELES-----O",
-    "SK": "10YSK-SEPS-----K",
+    "AT":"10YAT-APG------L",
+    "BE":"10YBE----------2",
+    "BG":"10YCA-BULGARIA-R",
+    "CH":"10YCH-SWISSGRIDZ",
+    "CZ":"10YCZ-CEPS-----N",
+    "DE":"10Y1001A1001A83F",
+    "DK":"10Y1001A1001A65H",
+    "EE":"10Y1001A1001A39I",
+    "ES":"10YES-REE------0",
+    "FI":"10YFI-1--------U",
+    "FR":"10YFR-RTE------C",
+    "GR":"10YGR-HTSO-----Y",
+    "HR":"10YHR-HEP------M",
+    "HU":"10YHU-MAVIR----U",
+    "IE":"10YIE-1001A00010",
+    "IT":"10YIT-GRTN-----B",
+    "LT":"10YLT-1001A0008Q",
+    "LV":"10YLV-1001A00074",
+    "NL":"10YNL----------L",
+    "PL":"10YPL-AREA-----S",
+    "PT":"10YPT-REN------W",
+    "RO":"10YRO-TEL------P",
+    "RS":"10YCS-SERBIATSOV",
+    "SE":"10YSE-1--------K",
+    "SI":"10YSI-ELES-----O",
+    "SK":"10YSK-SEPS-----K",
 }
+
+
+
+ENTSOE_TARGET_REGIONS = None
 
 DIRECT_EMISSION_FACTORS = {
     "biomass": 0,
@@ -163,7 +231,10 @@ def fetch_and_store_entsoe_data(target_date: str) -> dict:
     updated = 0
     errors = 0
 
+    target_regions = ENTSOE_TARGET_REGIONS if ENTSOE_TARGET_REGIONS else ENTSOE_AREA_CODES.keys()
     for region_code, area_code in ENTSOE_AREA_CODES.items():
+        if region_code not in target_regions:
+            continue
         try:
             df = client.query_generation(area_code, start=start, end=end, psr_type=None)
             if df is None or df.empty:
@@ -178,7 +249,7 @@ def fetch_and_store_entsoe_data(target_date: str) -> dict:
                     df = df.droplevel(-1, axis=1)
 
             # Resample raw resolution (15min/30min/60min) into hourly means in MW.
-            df = df.resample("H").mean()
+            df = df.resample("h").mean()
 
             for ts, row in df.iterrows():
                 ts_utc = _coerce_datetime(ts)
@@ -187,9 +258,35 @@ def fetch_and_store_entsoe_data(target_date: str) -> dict:
 
                 sources = {}
                 for psr, value in row.items():
-                    source_name = ENTSOE_PSR_TYPE_TO_SOURCE.get(str(psr), "other")
                     if value is None or (isinstance(value, float) and value != value):
                         continue
+
+                    # Resolve column name to CarbonCast source name.
+                    # entsoe-py returns either B-codes ("B16"), human-readable
+                    # fuel names ("Solar"), or tuples depending on country/version.
+                    # Try all paths so wrong values are not silently bucketed as "other".
+                    psr_str = str(psr)
+                    source_name = None
+
+                    # 1. Tuple column (MultiIndex not fully flattened)
+                    if isinstance(psr, tuple):
+                        for part in psr:
+                            part_str = str(part)
+                            if part_str in FUEL_MAP:
+                                source_name = SOURCE_MAP.get(FUEL_MAP[part_str], "other")
+                                break
+                            if part_str in ENTSOE_PSR_TYPE_TO_SOURCE:
+                                source_name = ENTSOE_PSR_TYPE_TO_SOURCE[part_str]
+                                break
+
+                    # 2. Human-readable fuel name string ("Solar", "Fossil Gas", …)
+                    if source_name is None and psr_str in FUEL_MAP:
+                        source_name = SOURCE_MAP.get(FUEL_MAP[psr_str], "other")
+
+                    # 3. B-code ("B16", "B04", …)
+                    if source_name is None:
+                        source_name = ENTSOE_PSR_TYPE_TO_SOURCE.get(psr_str, "other")
+
                     sources[source_name] = sources.get(source_name, 0.0) + max(float(value), 0.0)
 
                 if not sources:

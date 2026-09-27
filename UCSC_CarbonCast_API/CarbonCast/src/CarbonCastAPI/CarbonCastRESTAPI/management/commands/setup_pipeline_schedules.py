@@ -58,6 +58,22 @@ class Command(BaseCommand):
             'day_of_week': '1',
             'description': 'Run weekly CarbonCast retraining Monday 06:00 UTC.',
         },
+        {
+            'name': 'carboncast.daily_inference_batch',
+            'task': 'CarbonCastRESTAPI.tasks.daily_inference_batch',
+            'minute': '30',
+            'hour': '7',
+            'day_of_week': '*',
+            'description': 'Daily CI inference for all trained regions, 07:30 UTC.',
+        },
+        {
+            'name': 'carboncast.weekly_retraining_batch',
+            'task': 'CarbonCastRESTAPI.tasks.weekly_retraining_batch',
+            'minute': '0',
+            'hour': '3',
+            'day_of_week': '0',
+            'description': 'Weekly retraining for all regions, Sunday 03:00 UTC.',
+        },
     ]
 
     def handle(self, *args, **options):

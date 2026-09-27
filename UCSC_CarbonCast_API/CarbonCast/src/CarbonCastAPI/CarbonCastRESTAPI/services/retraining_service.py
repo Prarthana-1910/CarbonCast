@@ -90,7 +90,8 @@ def _retrain_region(region: str, model_run):
     model_run.save(update_fields=['model_name'])
 
     batch_id = uuid.uuid4().hex[:12]
-    forecast_start = _next_utc_hour()
+    override = os.environ.get("CARBONCAST_FORECAST_START_OVERRIDE")
+    forecast_start = datetime.fromisoformat(override) if override else _next_utc_hour()
     artifact_dir = _artifact_dir(batch_id, region)
     artifact_dir.mkdir(parents=True, exist_ok=True)
 
@@ -114,6 +115,9 @@ def _retrain_region(region: str, model_run):
     model_run.save(update_fields=['weather_source', 'config', 'model_artifact_path'])
 
     ml_result = _try_run_existing_carboncast(region, forecast_start, artifact_dir)
+    real_time_dir = os.environ.get("CARBONCAST_REAL_TIME_DIR", str(artifact_dir))
+    ml_persist_result = _persist_ml_forecast(region, ml_result, batch_id, real_time_dir, forecast_start)
+    ml_result['persisted'] = ml_persist_result
     forecast_counts = _persist_baseline_forecast(
         region=region,
         emissions=emissions,
@@ -229,20 +233,95 @@ def _try_run_existing_carboncast(region, forecast_start, artifact_dir):
     if not _truthy(os.environ.get("CARBONCAST_RUN_ML")):
         return {'attempted': False, 'status': 'disabled'}
 
-    config_file = os.environ.get("CARBONCAST_CONFIG_FILE")
+    config_file = os.environ.get("CARBONCAST_CONFIG_FILE")           # first tier
+    second_tier_config_file = os.environ.get("CARBONCAST_SECOND_TIER_CONFIG_FILE", config_file)  # second tier
     if not config_file:
         return {'attempted': True, 'status': 'skipped_missing_config'}
 
     try:
+        import sys
+        import csv as csv_module
+        SRC_DIR = "/Users/prarthanapatil/Documents/EnergyAPI11/CarbonCast/UCSC_CarbonCast_API/CarbonCast/src"
+        if SRC_DIR not in sys.path:
+            sys.path.insert(0, SRC_DIR)
+
         from firstTierForecasts import runFirstTierInRealTime
         from secondTierForecasts import runSecondTierInRealTime
 
         creation_time = tz.now().astimezone(timezone.utc).isoformat()
         start_date = forecast_start.date().isoformat()
-        electricity_date = (forecast_start - timedelta(days=1)).date().isoformat()
         real_time_dir = os.environ.get("CARBONCAST_REAL_TIME_DIR", str(artifact_dir))
         weather_dir = os.environ.get("CARBONCAST_REAL_TIME_WEATHER_DIR", str(artifact_dir))
         version = os.environ.get("CARBONCAST_MODEL_VERSION", "db-pipeline-v1")
+
+        def _row_count(csv_path):
+            if not os.path.exists(csv_path):
+                return None
+            with open(csv_path) as f:
+                return sum(1 for _ in csv_module.reader(f)) - 1  # subtract header
+
+        # --- Try yesterday first, fall back to earlier days if thin ---
+        electricity_date = None
+        for days_back in range(1, 15):
+            candidate_date = (forecast_start - timedelta(days=days_back)).date().isoformat()
+            candidate_path = os.path.join(real_time_dir, region, f"{region}_{candidate_date}.csv")
+            count = _row_count(candidate_path)
+
+            if count is None:
+                continue
+            if count < 24:
+                continue
+
+            electricity_date = candidate_date
+            if days_back > 1:
+                logger.info("[%s] Using fallback date %s for electricity data", region, candidate_date)
+            break
+
+        if electricity_date is None:
+            # Fall back to any available staged file with 24 hours
+            region_dir = os.path.join(real_time_dir, region)
+            if os.path.isdir(region_dir):
+                for f in sorted(os.listdir(region_dir), reverse=True):
+                    if f.startswith(f"{region}_") and f.endswith(".csv") and not ("emissions" in f or "forecast" in f or "weather" in f):
+                        cand_date = f.replace(f"{region}_", "").replace(".csv", "")
+                        if _row_count(os.path.join(region_dir, f)) >= 24:
+                            electricity_date = cand_date
+                            logger.info("[%s] Using latest available staged date %s for electricity data", region, electricity_date)
+                            break
+
+        # --- Check weather has a full day available; fall back to yesterday's
+        # staged forecast if today's is thin (e.g. partial NOMADS download) ---
+        weather_path = os.path.join(weather_dir, region, f"{region}_weather_forecast_{start_date}.csv")
+        weather_count = _row_count(weather_path)
+
+        if weather_count is None or weather_count < 24:
+            yesterday_date = (forecast_start - timedelta(days=1)).date().isoformat()
+            fallback_weather_path = os.path.join(weather_dir, region, f"{region}_weather_forecast_{yesterday_date}.csv")
+            fallback_count = _row_count(fallback_weather_path)
+
+            if fallback_count is not None and fallback_count >= 24:
+                logger.warning(
+                    "[%s] Weather data for %s only has %s hours — falling back to "
+                    "yesterday's staged forecast (%s, %s hours).",
+                    region, start_date, weather_count, yesterday_date, fallback_count,
+                )
+                weather_path = fallback_weather_path
+                start_date = yesterday_date  # runFirstTierInRealTime reads this file by start_date
+            else:
+                logger.warning(
+                    "[%s] Weather data for %s only has %s hours, and yesterday's fallback "
+                    "(%s) is also unavailable/thin (%s hours) — skipping ML inference this cycle.",
+                    region, start_date, weather_count, yesterday_date, fallback_count,
+                )
+                return {'attempted': True, 'status': 'skipped_thin_weather_data'}
+
+        if electricity_date is None:
+            logger.warning(
+                "[%s] No usable electricity data available — skipping ML inference this cycle. "
+                "Baseline forecast will still be used.",
+                region,
+            )
+            return {'attempted': True, 'status': 'skipped_thin_data'}
 
         first_tier_files = runFirstTierInRealTime(
             config_file,
@@ -255,23 +334,109 @@ def _try_run_existing_carboncast(region, forecast_start, artifact_dir):
             creation_time,
             version,
         )
-        for cef_type in ("direct", "lifecycle"):
+        for cef_type in ("-d", "-l"):
             runSecondTierInRealTime(
-                config_file,
+                second_tier_config_file,
                 [region],
                 cef_type,
                 start_date,
                 electricity_date,
                 real_time_dir,
                 weather_dir,
-                first_tier_files[0] if first_tier_files else "",
+                first_tier_files if first_tier_files else {},
                 creation_time,
                 version,
             )
-        return {'attempted': True, 'status': 'completed', 'first_tier_files': first_tier_files}
+        return {'attempted': True, 'status': 'completed', 'electricity_date_used': electricity_date, 'first_tier_files': first_tier_files}
     except Exception as exc:
         logger.exception("Configured CarbonCast ML execution failed for %s", region)
         return {'attempted': True, 'status': 'failed', 'error': str(exc)}
+
+
+def _persist_ml_forecast(region, ml_result, batch_id, real_time_dir, forecast_start):
+    """
+    Reads the CSVs written by runSecondTierInRealTime (writeRealTimeCIForecastsToFile)
+    and inserts/overwrites real ML-generated forecasts into Forecast168.
+    Uses update_or_create keyed on (region_code, datetime, source_type,
+    emission_factor_type) -- matching the DB's actual unique constraint --
+    so each new run correctly OVERWRITES the previous forecast for that
+    region/hour, rather than accumulating duplicate rows.
+
+    After writing, prunes any stale rows for this region whose datetime
+    falls before this run's forecast_start -- these are leftovers from a
+    previous day's run whose window no longer overlaps with today's.
+    """
+    import csv as csv_module
+    from datetime import datetime as dt, timezone as tz_module
+    from CarbonCastRESTAPI.models import Forecast168
+
+    if not ml_result.get('attempted') or ml_result.get('status') != 'completed':
+        return {'written': 0, 'reason': ml_result.get('status', 'not_attempted')}
+
+    start_date = forecast_start.date().isoformat()
+    written = 0
+
+    for cef_label, file_suffix in (('direct', 'direct'), ('lifecycle', 'lifecycle')):
+        out_path = os.path.join(
+            real_time_dir, region,
+            f"{region}_{file_suffix}_CI_forecasts_{start_date}.csv",
+        )
+        if not os.path.exists(out_path):
+            logger.warning("Expected ML output not found: %s", out_path)
+            continue
+
+        with open(out_path, newline="") as f:
+            reader = csv_module.DictReader(f)
+            for row in reader:
+                try:
+                    ts = dt.fromisoformat(row["UTC time"].split(".")[0])
+                    if ts.tzinfo is None:
+                        ts = ts.replace(tzinfo=tz_module.utc)
+                    issued = dt.fromisoformat(row["creation_time (UTC)"].split(".")[0])
+                    if issued.tzinfo is None:
+                        issued = issued.replace(tzinfo=tz_module.utc)
+                    value = float(row["forecasted_avg_carbon_intensity"])
+                except (KeyError, ValueError) as exc:
+                    logger.warning("Skipping malformed ML forecast row in %s: %s", out_path, exc)
+                    continue
+
+                Forecast168.objects.update_or_create(
+                    region_code=region,
+                    datetime=ts,
+                    source_type='model_forecast',
+                    emission_factor_type=cef_label,
+                    defaults={
+                        'value': value,
+                        'metric_unit': 'gCO2eq/kWh',
+                        'provider': 'carboncast',
+                        'forecast_run_id': batch_id,
+                        'issued_at': issued,
+                    },
+                )
+                written += 1
+
+    # Prune stale rows ONCE, after BOTH direct and lifecycle CSVs are done.
+    # Use the actual minimum datetime from THIS run (matched by issued_at,
+    # the batch timestamp shared by every row we just wrote) instead of
+    # forecast_start -- forecast_start can drift from what the model
+    # actually used as its start time by the time this prune runs, since
+    # the pipeline takes several minutes between computing forecast_start
+    # and writing these rows. Using the wrong cutoff was deleting this
+    # run's own valid early hours.
+    from django.db.models import Min
+    this_run_min = Forecast168.objects.filter(
+        region_code=region, issued_at=issued,
+    ).aggregate(Min('datetime'))['datetime__min']
+
+    if this_run_min:
+        deleted, _ = Forecast168.objects.filter(
+            region_code=region,
+            datetime__lt=this_run_min,
+        ).delete()
+        if deleted:
+            logger.info("[%s] Pruned %d stale forecast rows before %s", region, deleted, this_run_min)
+
+    return {'written': written}
 
 
 def _persist_baseline_forecast(region, emissions, batch_id, forecast_start, weather_source, artifact_dir, runner=None, weather_rows=None):
