@@ -34,15 +34,18 @@ be developed independently.
 ---
 
 ## Quick start
-
-Each sub-project has its own README with canonical instructions. The fast paths:
+ 
+Each sub-project has its own README with canonical instructions. The fast paths to run and visualize the system locally:
 
 ```bash
-# (1) Frontend
-cd CarbonCastUI/web && npm install && npm run dev
+# (1) Backend API (Django + PostgreSQL)
+cd UCSC_CarbonCast_API/CarbonCast/src/CarbonCastAPI
+DJANGO_SETTINGS_MODULE=CarbonCastAPI.settings \
+/Users/prarthanapatil/Documents/EnergyAPI11/CarbonCast/UCSC_CarbonCast_API/CarbonCast/.venv/bin/python manage.py runserver 8000
 
-# (2) Backend API (easiest via Docker)
-cd UCSC_CarbonCast_API/CarbonCast && docker compose up --build
+# (2) Frontend Map UI (React + MapLibre)
+cd CarbonCastUI/web && npm install && npm run dev
+# Open in browser: http://localhost:5173
 
 # (3) Automation tool
 cd UCSC_OSRE_CC_automation_tool/CarbonCast && pip install -r requirements.txt && pytest

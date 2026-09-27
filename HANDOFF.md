@@ -97,16 +97,11 @@ npm run dev          # opens a Vite dev server, usually http://localhost:5173
 
 ### 2. Backend API
 ```bash
-cd UCSC_CarbonCast_API/CarbonCast
-# The easiest path is Docker (brings up Postgres, Redis, web, and Celery):
-docker compose up --build
-# Or run Django directly (you'll need Python + a local Postgres):
-pip install -r requirements.txt
-cd src/CarbonCastAPI
-python manage.py migrate
-python manage.py runserver
+cd UCSC_CarbonCast_API/CarbonCast/src/CarbonCastAPI
+DJANGO_SETTINGS_MODULE=CarbonCastAPI.settings \
+/Users/prarthanapatil/Documents/EnergyAPI11/CarbonCast/UCSC_CarbonCast_API/CarbonCast/.venv/bin/python manage.py runserver 8000
 ```
-API docs (Swagger) are exposed by `drf_yasg` once the server is up.
+Running Django directly connects straight to your local PostgreSQL database containing the 168-hour ML forecasts. API docs (Swagger) are exposed at `http://localhost:8000/doc/`.
 
 ### 3. Automation tool
 ```bash
