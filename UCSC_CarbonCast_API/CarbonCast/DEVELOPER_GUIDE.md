@@ -445,7 +445,7 @@ Result B: Weather forecast file had < 168 hours
 
 ---
 
-# 5. END-TO-END MENTOR REVIEW CHECKLIST
+# 5. END-TO-END REVIEW CHECKLIST FOR Contributing
 
 When reviewing contributions to the CarbonCast pipelines, verify each item:
 
