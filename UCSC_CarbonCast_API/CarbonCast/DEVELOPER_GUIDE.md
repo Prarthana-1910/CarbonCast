@@ -443,27 +443,3 @@ Result B: Weather forecast file had < 168 hours
   → Action: Verify FCST list in fetch_grib_nomads.py covers list(range(0, 169, 3)).
 ```
 
----
-
-# 5. END-TO-END REVIEW CHECKLIST FOR Contributing
-
-When reviewing contributions to the CarbonCast pipelines, verify each item:
-
-### Real-Time Inference Validation
-* [ ] **Python Environment**: Script runs using `.venv/bin/python` without missing dependency errors.
-* [ ] **Grid Fetch**: `EmissionActual` records are populated or verified fresh ($< 6\text{h}$).
-* [ ] **Weather Download**: NOMADS downloads GRIB files for all 4 variables (`temp`, `wind`, `dswrf`, `rain`) up to `f168`.
-* [ ] **Staging Output**: Staged electricity has 24 complete hours; staged weather has 168 continuous hours.
-* [ ] **Tier 1 Execution**: Generates ANN prediction CSVs for all sources in `REGION_SOURCES`.
-* [ ] **Tier 2 Execution**: Generates both Direct and Lifecycle forecast CSVs.
-* [ ] **Database Persistence**: Exactly 336 rows ($168 \text{ direct} + 168 \text{ lifecycle}$) written to `Forecast168`.
-* [ ] **Value Sanity**: Direct CI $\le$ Lifecycle CI; predictions exhibit diurnal variation.
-
-### Weekly Retraining Validation
-* [ ] **Gap Detection**: `compute_gap()` identifies missing date window without overlaps.
-* [ ] **RDA Extraction**: If `.tar` files were downloaded, `extract_rda_tars()` extracted and removed them.
-* [ ] **Append Mode**: New grid actuals are appended without overwriting historical CSV rows.
-* [ ] **Sliding Window**: Oldest days trimmed consistently across weather CSVs and `EmissionActual`.
-* [ ] **Dataset Limiter**: `DATASET_LIMITER` is capped to $\min(\text{electricity\_rows}, \text{weather\_rows})$.
-* [ ] **Tier 1 & Tier 2 Weights**: Model `.h5` files and `min_max_values.txt` scalers updated in `saved_*_models/`.
-* [ ] **Evaluation Output**: `MAPE_iter0.txt` generated with realistic, non-infinite scores.
