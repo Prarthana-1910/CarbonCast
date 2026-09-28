@@ -42,6 +42,6 @@ django-celery-results>=2.5
 django-redis>=5.4
 
 # Energy APIs
-entsoe-py>=0.7.11
+#entsoe-py>=0.7.11
 python-dateutil>=2.8
 requests>=2.31

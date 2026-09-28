@@ -13,15 +13,16 @@ import subprocess
 from datetime import datetime
 
 # ── CONFIG ────────────────────────────────────────────────────────────────────
-BASE_DIR        = os.path.expanduser("~/CarbonCast_spring26/UCSC_OSRE_CC_automation_tool/CarbonCast")
-CARBONCAST_SRC  = os.path.expanduser("~/CarbonCast_spring26/UCSC_CarbonCast_API/CarbonCast/src")
+BASE_DIR        = "/Users/prarthanapatil/Documents/EnergyAPI/CarbonCast/UCSC_OSRE_CC_automation_tool/CarbonCast"
+CARBONCAST_SRC  = "/Users/prarthanapatil/Documents/EnergyAPI/CarbonCast/UCSC_CarbonCast_API/CarbonCast/src"
 PROCESSED_DIR   = os.path.join(BASE_DIR, "processed_data")
 MODELS_DIR      = os.path.join(BASE_DIR, "models")
 RESULTS_DIR     = os.path.join(BASE_DIR, "results")
 LOG_FILE        = os.path.join(BASE_DIR, "logs", "train_pipeline.log")
 STATE_FILE      = os.path.join(BASE_DIR, "pipeline_state.json")
-CONFIG_FILE     = os.path.join(CARBONCAST_SRC, "config.json")   # existing CC config
-VENV_PYTHON     = os.path.join(BASE_DIR, "src/python/venv/bin/python")
+FIRST_TIER_CONFIG  = os.path.join(CARBONCAST_SRC, "firstTierConfig.json")
+SECOND_TIER_CONFIG = os.path.join(CARBONCAST_SRC, "secondTierConfig.json")
+VENV_PYTHON     = "/Users/prarthanapatil/Documents/EnergyAPI/src/python/venv/bin/python3"
 
 # Date splits — edit these before running
 TRAIN_START     = "2020-01-01"
@@ -66,7 +67,7 @@ def run_first_tier(region, phase, date_start, date_end):
     log.info(f"[{region}] First tier {phase}: {date_start} → {date_end}")
     result = subprocess.run(
         [VENV_PYTHON, script,
-         "--config", CONFIG_FILE,
+         "--config", FIRST_TIER_CONFIG,
          "--region", region,
          "--start_date", date_start,
          "--end_date", date_end,
@@ -94,7 +95,7 @@ def run_second_tier(region, phase, date_start, date_end, first_tier_output):
         log.info(f"[{region}] Second tier {phase} ({cef_type})")
         result = subprocess.run(
             [VENV_PYTHON, script,
-             "--config", CONFIG_FILE,
+             "--config", SECOND_TIER_CONFIG,
              "--region", region,
              "--cef_type", cef_type,
              "--start_date", date_start,

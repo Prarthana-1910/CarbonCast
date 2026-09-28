@@ -1,5 +1,5 @@
 dataset=ds084.1
-date=202412010000/to/202501010000
+date=202605180000/to/202608160000
 datetype=init
 param=U GRD/V GRD
 level=HTGL:10

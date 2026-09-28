@@ -1,559 +1,2420 @@
 {
     "GENERAL_INFO": {
         "APP_NAME": "CarbonCast",
-        "VERSION": "v3.0",
+        "VERSION": "v2.0",
         "CONFIGURATION_TIER": "Tier-1",
-        "YEAR": 2023,
+        "YEAR": 2022,
         "AUTHOR": "Diptyaroop Maji",
         "AFFILIATION": "University of Massachusetts, Amherst"
     },
-
-    // Regions: CISO, PJM, ERCO, ISNE, NYISO, FPL, BPAT, SE, DE, ES, NL, PL, AUS_QLD
-    // Can include multiple regions in the list, separated by comma.
-
-    "REGION_WITH_INCONSISTENT_DATA": ["BANC", "FPC", "GRID", "PSEI", "WALC"], // TODO: check these later
-    "REGION_WITH_SINGLE_SOURCE": ["GCPD", "SCL", "TPWR"], // TODO: check these later
-
-    // "REGION": ["AECI", "AZPS", "BPAT", "CISO", "DUK", "EPE", "ERCOT", "FPL", "IPCO", 
-    //             "ISNE", "LDWP", "MISO", "NEVP", "NWMT", "NYISO", "PACE", "PACW", "PJM", 
-    //             "PSCO", "SC", "SCEG", "SOCO", "SPA", "SRP", "SWPP", "TIDC", "TVA", "WACM"],
-    "REGION": ["CISO"],
-    "NUM_VAL_DAYS": 30, // 1 month
-    "MODEL_SLIDING_WINDOW_LEN": 24, 
-    "TRAINING_WINDOW_HOURS": 24, 
-    "PREDICTION_WINDOW_HOURS": 96,
-    "MAX_PREDICTION_WINDOW_HOURS": 96, // max is 96, but if we only want to predict 48 hours, change the PREDICTION_WINDOW_HOURS field
-    "NUM_FEATURES": 6,
+    "MODEL_SLIDING_WINDOW_LEN": 24,
+    "TRAINING_WINDOW_HOURS": 24,
+    "PREDICTION_WINDOW_HOURS": 168,
+    "MAX_PREDICTION_WINDOW_HOURS": 168,
     "NUM_WEATHER_FEATURES": 5,
     "NUMBER_OF_EXPERIMENTS_PER_REGION": 1,
-    "SAVED_MODEL_LOCATION": "../saved_first_tier_models/",
-
-    "ROW_START_FOR_2020": 35040,
-    "ROW_END_FOR_2022": 139968,
-    "SOURCE_FORECAST_ROW_END_FOR_2022": 104928,
-
+    "SAVED_MODEL_LOCATION": "/Users/prarthanapatil/Documents/EnergyAPI11/CarbonCast/UCSC_CarbonCast_API/CarbonCast/saved_first_tier_models/",
+    "ROW_START_FOR_2020": 0,
+    "ROW_END_FOR_2022": 10584,
+    "SOURCE_FORECAST_ROW_END_FOR_2022": 10584,
+    "NUM_VAL_DAYS": 15,
+    "REGION": [
+        "GB"
+    ],
     "TRAIN_TEST_PERIOD": {
         "PERIOD_0": {
-            // Train - Jan - Dec 2019, Test - Jan - Jun 2020
-            "DATASET_LIMITER": 13128,
-            "OUT_FILE_SUFFIX": "h1_2020",
-            "NUM_TEST_DAYS": 182
-        },
-        "PERIOD_1": {
-            // Train - Jan 2019 - Jun 2020, Test - Jul - Dec 2020
-            "DATASET_LIMITER": 17544,
-            "OUT_FILE_SUFFIX": "h2_2020",
-            "NUM_TEST_DAYS": 184
-        },
-        "PERIOD_2": {
-            // Train - Jan 2020 - Dec 2020, Test - Jan - Jun 2021
-            "DATASET_LIMITER": 21888,
-            "OUT_FILE_SUFFIX": "h1_2021",
-            "NUM_TEST_DAYS": 181
-        },
-        "PERIOD_3": {
-            // Train - Jan 2020 - Jun 2021, Test - Jul - Dec 2021
-            "DATASET_LIMITER": 26304,
-            "OUT_FILE_SUFFIX": "h2_2021",
-            "NUM_TEST_DAYS": 184
-        },
-        "PERIOD_4": {
-            // Train - Jan 2020 - Dec 2021, Test - Jan - Jun 2022
-            "DATASET_LIMITER": 30648,
-            "OUT_FILE_SUFFIX": "h1_2022",
-            "NUM_TEST_DAYS": 181
-        },
-        "PERIOD_5": {
-            // Train - Jan 2020 - Jun 2022, Test - Jul - Dec 2022
-            "DATASET_LIMITER": 35064,
-            "OUT_FILE_SUFFIX": "h2_2022",
-            "NUM_TEST_DAYS": 184
+            "DATASET_LIMITER": 15868,
+            "OUT_FILE_SUFFIX": "current",
+            "NUM_TEST_DAYS": 524
         }
     },
-
     "NUM_FEATURES_PER_SOURCE": {
-        "coal":6, 
-        "nat_gas":6, 
-        "nuclear":6, 
-        "oil":6, 
-        "hydro":11, 
+        "coal": 6,
+        "nat_gas": 6,
+        "nuclear": 6,
+        "oil": 6,
+        "hydro": 11,
         "solar": 11,
-        "wind":11, 
-        "other":6, 
-        "unknown": 6, 
-        "biomass": 6, 
-        "geothermal":6, 
-        "demand":6
+        "wind": 11,
+        "other": 6,
+        "unknown": 6,
+        "biomass": 6,
+        "geothermal": 6,
+        "demand": 6
     },
-
     "FIRST_TIER_ANN_MODEL_HYPERPARAMS": {
         "EPOCH": 100,
-        "BATCH_SIZE": [10],
+        "BATCH_SIZE": [
+            10
+        ],
         "ACTIVATION_FUNC": "relu",
         "LOSS_FUNC": "mse",
         "LEARNING_RATE": 0.01,
-        "HIDDEN_UNITS": [50, 34] // [50, 50]]#, [20, 50]] #, [50, 50]]
+        "HIDDEN_UNITS": [
+            50,
+            34
+        ]
     },
-
     "IN_FILE_NAME_SUFFIX": "_clean.csv",
-
-    // US regions
-
-    "CISO": {
-        "IN_FILE_NAME_PREFIX": "../data/CISO/fuel_forecast/CISO_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/CISO/CISO_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/CISO/fuel_forecast/CISO_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/CISO/CISO_96hr_forecasts_DA.csv",
-        "SOURCES": ["COAL", "NAT_GAS", "NUCLEAR", "OIL", "HYDRO", "SOLAR", "WIND", "OTHER"],
-        "SOURCE_COL": [0, 1, 2, 3, 4, 5, 6, 7],
-        // "PARTIAL_FORECAST_AVAILABILITY_LIST": [1, 1, 1, 1, 1, 1, 1, 1],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0, 0, 1, 1, 0],
-        // Solar/wind day ahead forecasts are available. For other sources,
-        // using day-ahead forecasts obtained for DACF for consistency
-        "PARTIAL_FORECAST_HOURS": 24 // change this later to list if required
-    },
-
-    "PJM": {
-        "IN_FILE_NAME_PREFIX": "../data/PJM/fuel_forecast/PJM_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/PJM/PJM_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/PJM/fuel_forecast/PJM_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/PJM/PJM_96hr_forecasts_DA.csv",
-        "SOURCES": ["COAL", "NAT_GAS", "NUCLEAR", "OIL", "HYDRO", "SOLAR", "WIND", "OTHER"],
-        "SOURCE_COL": [0, 1, 2, 3, 4, 5, 6, 7],
-        // "PARTIAL_FORECAST_AVAILABILITY_LIST": [1, 1, 1, 1, 1, 1, 1, 1], // 0 -- False, 1 -- True
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0, 0, 0, 0, 0],
-        // Using day-ahead forecasts obtained for DACF for consistency
-        "PARTIAL_FORECAST_HOURS": 24
-    },
-
-    "ERCO": {
-        "IN_FILE_NAME_PREFIX": "../data/ERCO/fuel_forecast/ERCO_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/ERCO/ERCO_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/ERCO/fuel_forecast/ERCO_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/ERCO/ERCO_96hr_forecasts_DA.csv",
-        "SOURCES": ["COAL", "NAT_GAS", "NUCLEAR", "HYDRO", "SOLAR", "WIND", "OTHER"],
-        "SOURCE_COL": [0, 1, 2, 3, 4, 5, 6],
-        // "PARTIAL_FORECAST_AVAILABILITY_LIST": [1, 1, 1, 1, 1, 1, 1], // 0 -- False, 1 -- True
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0, 0, 0, 0],
-        // Using day-ahead forecasts obtained for DACF for consistency
-        "PARTIAL_FORECAST_HOURS": 24
-    },
-
-    "ISNE": {
-        "IN_FILE_NAME_PREFIX": "../data/ISNE/fuel_forecast/ISNE_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/ISNE/ISNE_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/ISNE/fuel_forecast/ISNE_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/ISNE/ISNE_96hr_forecasts_DA.csv",
-        "SOURCES": ["COAL", "NAT_GAS", "NUCLEAR", "OIL", "HYDRO", "SOLAR", "WIND", "OTHER"],
-        "SOURCE_COL": [0, 1, 2, 3, 4, 5, 6, 7],
-        // "PARTIAL_FORECAST_AVAILABILITY_LIST": [1, 1, 1, 1, 1, 1, 1, 1], // 0 -- False, 1 -- True
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0, 0, 0, 0, 0],
-        // Using day-ahead forecasts obtained for DACF for consistency
-        "PARTIAL_FORECAST_HOURS": 24
-    },
-
-    "BPAT": {
-        "IN_FILE_NAME_PREFIX": "../data/BPAT/fuel_forecast/BPAT_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/BPAT/BPAT_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/BPAT/fuel_forecast/BPAT_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/BPAT/BPAT_96hr_forecasts_DA.csv",
-        "SOURCES": ["NAT_GAS", "NUCLEAR", "HYDRO", "SOLAR", "WIND", "OTHER"],
-        "SOURCE_COL": [0, 1, 2, 3, 4, 5],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0, 0, 0], // 0 -- False, 1 -- True
-        "PARTIAL_FORECAST_HOURS": 24
-    },
-
-    "FPL": {
-        "IN_FILE_NAME_PREFIX": "../data/FPL/fuel_forecast/FPL_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/FPL/FPL_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/FPL/fuel_forecast/FPL_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/FPL/FPL_96hr_forecasts_DA.csv",
-        "SOURCES": ["NAT_GAS", "NUCLEAR", "SOLAR", "OTHER"],
-        "SOURCE_COL": [0, 1, 2, 3],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0], // 0 -- False, 1 -- True
-        "PARTIAL_FORECAST_HOURS": 24
-    },
-
-    "NYIS": {
-        "IN_FILE_NAME_PREFIX": "../data/NYIS/fuel_forecast/NYIS_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/NYIS/NYIS_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/NYIS/fuel_forecast/NYIS_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/NYIS/NYIS_96hr_forecasts_DA.csv",
-        "SOURCES": ["NAT_GAS", "NUCLEAR", "OIL", "HYDRO", "WIND", "OTHER"],
-        "SOURCE_COL": [0, 1, 2, 3, 4, 5],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0, 0, 0], // 0 -- False, 1 -- True
-        "PARTIAL_FORECAST_HOURS": 24
-    },
-
-    "MISO": {
-        "IN_FILE_NAME_PREFIX": "../data/MISO/fuel_forecast/MISO_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/MISO/MISO_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/MISO/fuel_forecast/MISO_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/MISO/MISO_96hr_forecasts_DA.csv",
-        "SOURCES": ["COAL", "NAT_GAS", "OIL", "HYDRO", "SOLAR", "WIND", "OTHER"],
-        "SOURCE_COL": [0, 1, 2, 3, 4, 5, 6],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0, 0, 0, 0], // 0 -- False, 1 -- True
-        "PARTIAL_FORECAST_HOURS": 24
-    },
-
-    "SWPP": {
-        "IN_FILE_NAME_PREFIX": "../data/SWPP/fuel_forecast/SWPP_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/SWPP/SWPP_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/SWPP/fuel_forecast/SWPP_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/SWPP/SWPP_96hr_forecasts_DA.csv",
-        "SOURCES": ["COAL", "NAT_GAS", "NUCLEAR", "OIL", "HYDRO", "SOLAR", "WIND", "OTHER"],
-        "SOURCE_COL": [0, 1, 2, 3, 4, 5, 6, 7],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0, 0, 0, 0, 0],
-        "PARTIAL_FORECAST_HOURS": 24 // change this later to list if required
-    },
-
-    "SOCO": {
-        "IN_FILE_NAME_PREFIX": "../data/SOCO/fuel_forecast/SOCO_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/SOCO/SOCO_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/SOCO/fuel_forecast/SOCO_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/SOCO/SOCO_96hr_forecasts_DA.csv",
-        "SOURCES": ["COAL", "NAT_GAS", "NUCLEAR", "OIL", "HYDRO", "SOLAR", "WIND", "OTHER"],
-        "SOURCE_COL": [0, 1, 2, 3, 4, 5, 6, 7],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0, 0, 0, 0, 0],
-        "PARTIAL_FORECAST_HOURS": 24 // change this later to list if required
-    },
-
-    "BANC": {
-        "IN_FILE_NAME_PREFIX": "../data/SOCO/fuel_forecast/BANC_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/BANC/BANC_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/BANC/fuel_forecast/BANC_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/BANC/BANC_96hr_forecasts_DA.csv",
-        "SOURCES": ["NAT_GAS", "HYDRO", "SOLAR", "OTHER"],
-        "SOURCE_COL": [0, 1, 2, 3],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0],
-        "PARTIAL_FORECAST_HOURS": 24 // change this later to list if required
-    },
-
-    "LDWP": {
-        "IN_FILE_NAME_PREFIX": "../data/LDWP/fuel_forecast/LDWP_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/LDWP/LDWP_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/LDWP/fuel_forecast/LDWP_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/LDWP/LDWP_96hr_forecasts_DA.csv",
-        "SOURCES": ["COAL", "NAT_GAS", "HYDRO", "SOLAR", "WIND", "OTHER"],
-        "SOURCE_COL": [0, 1, 2, 3, 4, 5],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0, 0, 0],
-        "PARTIAL_FORECAST_HOURS": 24 // change this later to list if required
-    },
-
-    "TIDC": {
-        "IN_FILE_NAME_PREFIX": "../data/TIDC/fuel_forecast/TIDC_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/TIDC/TIDC_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/TIDC/fuel_forecast/TIDC_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/TIDC/TIDC_96hr_forecasts_DA.csv",
-        "SOURCES": ["NAT_GAS", "HYDRO"],
-        "SOURCE_COL": [0, 1],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0],
-        "PARTIAL_FORECAST_HOURS": 24 // change this later to list if required
-    },
-
-    "DUK": {
-        "IN_FILE_NAME_PREFIX": "../data/DUK/fuel_forecast/DUK_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/DUK/DUK_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/DUK/fuel_forecast/DUK_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/DUK/DUK_96hr_forecasts_DA.csv",
-        "SOURCES": ["COAL", "NAT_GAS", "NUCLEAR", "HYDRO", "SOLAR", "OTHER"],
-        "SOURCE_COL": [0, 1, 2, 3, 4, 5],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0, 0, 0],
-        "PARTIAL_FORECAST_HOURS": 24 // change this later to list if required
-    },
-
-    "SC": {
-        "IN_FILE_NAME_PREFIX": "../data/SC/fuel_forecast/SC_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/SC/SC_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/SC/fuel_forecast/SC_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/SC/SC_96hr_forecasts_DA.csv",
-        "SOURCES": ["COAL", "NAT_GAS", "OIL", "HYDRO", "SOLAR", "OTHER"],
-        "SOURCE_COL": [0, 1, 2, 3, 4, 5],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0, 0, 0],
-        "PARTIAL_FORECAST_HOURS": 24 // change this later to list if required
-    },
-
-    "SCEG": {
-        "IN_FILE_NAME_PREFIX": "../data/SCEG/fuel_forecast/SCEG_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/SCEG/SCEG_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/SCEG/fuel_forecast/SCEG_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/SCEG/SCEG_96hr_forecasts_DA.csv",
-        "SOURCES": ["COAL", "NAT_GAS", "NUCLEAR", "HYDRO", "SOLAR", "OTHER"],
-        "SOURCE_COL": [0, 1, 2, 3, 4, 5],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0, 0, 0],
-        "PARTIAL_FORECAST_HOURS": 24 // change this later to list if required
-    },
-
-    "SPA": {
-        "IN_FILE_NAME_PREFIX": "../data/SPA/fuel_forecast/SPA_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/SPA/SPA_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/SPA/fuel_forecast/SPA_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/SPA/SPA_96hr_forecasts_DA.csv",
-        "SOURCES": ["HYDRO", "OTHER"],
-        "SOURCE_COL": [0, 1],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0],
-        "PARTIAL_FORECAST_HOURS": 24 // change this later to list if required
-    },
-
-    "FPC": {
-        "IN_FILE_NAME_PREFIX": "../data/FPC/fuel_forecast/FPC_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/FPC/FPC_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/FPC/fuel_forecast/FPC_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/FPC/FPC_96hr_forecasts_DA.csv",
-        "SOURCES": ["COAL", "NAT_GAS", "OIL", "HYDRO", "SOLAR", "OTHER"],
-        "SOURCE_COL": [0, 1, 2, 3, 4, 5],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0, 0, 0],
-        "PARTIAL_FORECAST_HOURS": 24 // change this later to list if required
-    },
-
     "AECI": {
         "IN_FILE_NAME_PREFIX": "../data/AECI/fuel_forecast/AECI_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/AECI/AECI_weather_forecast.csv",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/AECI/AECI_weather_forecast_168.csv",
         "OUT_FILE_NAME_PREFIX": "../data/AECI/fuel_forecast/AECI_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/AECI/AECI_96hr_forecasts_DA.csv",
-        "SOURCES": ["COAL", "NAT_GAS", "WIND"],
-        "SOURCE_COL": [0, 1, 2],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0],
-        "PARTIAL_FORECAST_HOURS": 24 // change this later to list if required
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/AECI/fuel_forecast/AECI_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "WIND"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
     },
-
-    "GRID": {
-        "IN_FILE_NAME_PREFIX": "../data/GRID/fuel_forecast/GRID_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/GRID/GRID_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/GRID/fuel_forecast/GRID_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/GRID/GRID_96hr_forecasts_DA.csv",
-        "SOURCES": ["COAL", "NAT_GAS", "SOLAR", "WIND"],
-        "SOURCE_COL": [0, 1, 2, 3],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0],
-        "PARTIAL_FORECAST_HOURS": 24 // change this later to list if required
+    "DOPD": {
+        "IN_FILE_NAME_PREFIX": "../data/DOPD/fuel_forecast/DOPD_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/DOPD/DOPD_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/DOPD/fuel_forecast/DOPD_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/DOPD/fuel_forecast/DOPD_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "HYDRO"
+        ],
+        "SOURCE_COL": [
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
     },
-
-    "IPCO": {
-        "IN_FILE_NAME_PREFIX": "../data/IPCO/fuel_forecast/IPCO_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/IPCO/IPCO_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/IPCO/fuel_forecast/IPCO_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/IPCO/IPCO_96hr_forecasts_DA.csv",
-        "SOURCES": ["NAT_GAS", "OIL", "HYDRO", "SOLAR", "WIND", "OTHER"],
-        "SOURCE_COL": [0, 1, 2, 3, 4, 5],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0, 0, 0],
-        "PARTIAL_FORECAST_HOURS": 24 // change this later to list if required
-    },
-
-    "NEVP": {
-        "IN_FILE_NAME_PREFIX": "../data/NEVP/fuel_forecast/NEVP_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/NEVP/NEVP_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/NEVP/fuel_forecast/NEVP_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/NEVP/NEVP_96hr_forecasts_DA.csv",
-        "SOURCES": ["COAL", "NAT_GAS", "NUCLEAR", "OIL", "HYDRO", "SOLAR", "WIND", "OTHER"],
-        "SOURCE_COL": [0, 1, 2, 3, 4, 5, 6, 7],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0, 0, 0, 0, 0],
-        "PARTIAL_FORECAST_HOURS": 24 // change this later to list if required
-    },
-
-    "NWMT": {
-        "IN_FILE_NAME_PREFIX": "../data/NWMT/fuel_forecast/NWMT_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/NWMT/NWMT_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/NWMT/fuel_forecast/NWMT_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/NWMT/NWMT_96hr_forecasts_DA.csv",
-        "SOURCES": ["COAL", "NAT_GAS", "OIL", "HYDRO", "SOLAR", "WIND"],
-        "SOURCE_COL": [0, 1, 2, 3, 4, 5],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0, 0, 0],
-        "PARTIAL_FORECAST_HOURS": 24 // change this later to list if required
-    },
-
-    "PACE": {
-        "IN_FILE_NAME_PREFIX": "../data/PACE/fuel_forecast/PACE_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/PACE/PACE_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/PACE/fuel_forecast/PACE_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/PACE/PACE_96hr_forecasts_DA.csv",
-        "SOURCES": ["COAL", "NAT_GAS", "HYDRO", "SOLAR", "WIND", "OTHER"],
-        "SOURCE_COL": [0, 1, 2, 3, 4, 5],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0, 0, 0],
-        "PARTIAL_FORECAST_HOURS": 24 // change this later to list if required
-    },
-
-    "PACW": {
-        "IN_FILE_NAME_PREFIX": "../data/PACW/fuel_forecast/PACW_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/PACW/PACW_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/PACW/fuel_forecast/PACW_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/PACW/PACW_96hr_forecasts_DA.csv",
-        "SOURCES": ["COAL", "NAT_GAS", "HYDRO", "SOLAR", "WIND", "OTHER"],
-        "SOURCE_COL": [0, 1, 2, 3, 4, 5],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0, 0, 0],
-        "PARTIAL_FORECAST_HOURS": 24 // change this later to list if required
-    },
-
-    "PSCO": {
-        "IN_FILE_NAME_PREFIX": "../data/PSCO/fuel_forecast/PSCO_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/PSCO/PSCO_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/PSCO/fuel_forecast/PSCO_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/PSCO/PSCO_96hr_forecasts_DA.csv",
-        "SOURCES": ["COAL", "NAT_GAS", "OIL", "HYDRO", "SOLAR", "WIND"],
-        "SOURCE_COL": [0, 1, 2, 3, 4, 5],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0, 0, 0],
-        "PARTIAL_FORECAST_HOURS": 24 // change this later to list if required
-    },
-
-    "PSEI": {
-        "IN_FILE_NAME_PREFIX": "../data/PSEI/fuel_forecast/PSEI_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/PSEI/PSEI_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/PSEI/fuel_forecast/PSEI_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/PSEI/PSEI_96hr_forecasts_DA.csv",
-        "SOURCES": ["COAL", "NAT_GAS", "OIL", "HYDRO", "SOLAR", "WIND", "OTHER"],
-        "SOURCE_COL": [0, 1, 2, 3, 4, 5, 6],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0, 0, 0, 0],
-        "PARTIAL_FORECAST_HOURS": 24 // change this later to list if required
-    },
-
-    "WACM": {
-        "IN_FILE_NAME_PREFIX": "../data/WACM/fuel_forecast/WACM_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/WACM/WACM_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/WACM/fuel_forecast/WACM_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/WACM/WACM_96hr_forecasts_DA.csv",
-        "SOURCES": ["COAL", "NAT_GAS", "HYDRO", "SOLAR", "WIND"],
-        "SOURCE_COL": [0, 1, 2, 3, 4],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0, 0],
-        "PARTIAL_FORECAST_HOURS": 24 // change this later to list if required
-    },
-
     "AZPS": {
         "IN_FILE_NAME_PREFIX": "../data/AZPS/fuel_forecast/AZPS_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/AZPS/AZPS_weather_forecast.csv",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/AZPS/AZPS_weather_forecast_168.csv",
         "OUT_FILE_NAME_PREFIX": "../data/AZPS/fuel_forecast/AZPS_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/AZPS/AZPS_96hr_forecasts_DA.csv",
-        "SOURCES": ["COAL", "NAT_GAS", "NUCLEAR", "OIL", "HYDRO", "SOLAR", "WIND", "OTHER"],
-        "SOURCE_COL": [0, 1, 2, 3, 4, 5, 6, 7],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0, 0, 0, 0, 0],
-        "PARTIAL_FORECAST_HOURS": 24 // change this later to list if required
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/AZPS/fuel_forecast/AZPS_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "NUCLEAR",
+            "OIL",
+            "HYDRO",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
     },
-
+    "BPAT": {
+        "IN_FILE_NAME_PREFIX": "../data/BPAT/fuel_forecast/BPAT_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/BPAT/BPAT_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/BPAT/fuel_forecast/BPAT_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/BPAT/fuel_forecast/BPAT_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "NAT_GAS",
+            "NUCLEAR",
+            "HYDRO",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "BANC": {
+        "IN_FILE_NAME_PREFIX": "../data/BANC/fuel_forecast/BANC_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/BANC/BANC_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/BANC/fuel_forecast/BANC_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/BANC/fuel_forecast/BANC_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "NAT_GAS",
+            "HYDRO",
+            "SOLAR",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "CISO": {
+        "IN_FILE_NAME_PREFIX": "../data/CISO/fuel_forecast/CISO_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/CISO/CISO_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/CISO/fuel_forecast/CISO_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/CISO/fuel_forecast/CISO_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "NUCLEAR",
+            "OIL",
+            "HYDRO",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "FMPP": {
+        "IN_FILE_NAME_PREFIX": "../data/FMPP/fuel_forecast/FMPP_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/FMPP/FMPP_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/FMPP/fuel_forecast/FMPP_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/FMPP/fuel_forecast/FMPP_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "NUCLEAR",
+            "OIL",
+            "OTHER",
+            "SOLAR"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "DUK": {
+        "IN_FILE_NAME_PREFIX": "../data/DUK/fuel_forecast/DUK_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/DUK/DUK_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/DUK/fuel_forecast/DUK_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/DUK/fuel_forecast/DUK_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "NUCLEAR",
+            "HYDRO",
+            "SOLAR",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
     "EPE": {
         "IN_FILE_NAME_PREFIX": "../data/EPE/fuel_forecast/EPE_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/EPE/EPE_weather_forecast.csv",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/EPE/EPE_weather_forecast_168.csv",
         "OUT_FILE_NAME_PREFIX": "../data/EPE/fuel_forecast/EPE_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/EPE/EPE_96hr_forecasts_DA.csv",
-        "SOURCES": ["NAT_GAS", "SOLAR"],
-        "SOURCE_COL": [0, 1],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0],
-        "PARTIAL_FORECAST_HOURS": 24 // change this later to list if required
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/EPE/fuel_forecast/EPE_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "NAT_GAS",
+            "SOLAR"
+        ],
+        "SOURCE_COL": [
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
     },
-
+    "ERCO": {
+        "IN_FILE_NAME_PREFIX": "../data/ERCO/fuel_forecast/ERCO_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/ERCO/ERCO_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/ERCO/fuel_forecast/ERCO_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/ERCO/fuel_forecast/ERCO_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "NUCLEAR",
+            "HYDRO",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "FPC": {
+        "IN_FILE_NAME_PREFIX": "../data/FPC/fuel_forecast/FPC_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/FPC/FPC_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/FPC/fuel_forecast/FPC_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/FPC/fuel_forecast/FPC_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "OIL",
+            "HYDRO",
+            "SOLAR",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "FPL": {
+        "IN_FILE_NAME_PREFIX": "../data/FPL/fuel_forecast/FPL_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/FPL/FPL_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/FPL/fuel_forecast/FPL_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/FPL/fuel_forecast/FPL_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "NAT_GAS",
+            "NUCLEAR",
+            "OIL",
+            "SOLAR",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "GRID": {
+        "IN_FILE_NAME_PREFIX": "../data/GRID/fuel_forecast/GRID_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/GRID/GRID_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/GRID/fuel_forecast/GRID_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/GRID/fuel_forecast/GRID_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "SOLAR",
+            "WIND"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "GCPD": {
+        "IN_FILE_NAME_PREFIX": "../data/GCPD/fuel_forecast/GCPD_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/GCPD/GCPD_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/GCPD/fuel_forecast/GCPD_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/GCPD/fuel_forecast/GCPD_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "HYDRO"
+        ],
+        "SOURCE_COL": [
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "IPCO": {
+        "IN_FILE_NAME_PREFIX": "../data/IPCO/fuel_forecast/IPCO_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/IPCO/IPCO_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/IPCO/fuel_forecast/IPCO_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/IPCO/fuel_forecast/IPCO_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "NAT_GAS",
+            "OIL",
+            "HYDRO",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "ISNE": {
+        "IN_FILE_NAME_PREFIX": "../data/ISNE/fuel_forecast/ISNE_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/ISNE/ISNE_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/ISNE/fuel_forecast/ISNE_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/ISNE/fuel_forecast/ISNE_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "NUCLEAR",
+            "OIL",
+            "HYDRO",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "LDWP": {
+        "IN_FILE_NAME_PREFIX": "../data/LDWP/fuel_forecast/LDWP_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/LDWP/LDWP_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/LDWP/fuel_forecast/LDWP_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/LDWP/fuel_forecast/LDWP_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "HYDRO",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "LGEE": {
+        "IN_FILE_NAME_PREFIX": "../data/LGEE/fuel_forecast/LGEE_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/LGEE/LGEE_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/LGEE/fuel_forecast/LGEE_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/LGEE/fuel_forecast/LGEE_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "HYDRO",
+            "OIL",
+            "SOLAR"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "MISO": {
+        "IN_FILE_NAME_PREFIX": "../data/MISO/fuel_forecast/MISO_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/MISO/MISO_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/MISO/fuel_forecast/MISO_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/MISO/fuel_forecast/MISO_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "NUCLEAR",
+            "HYDRO",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "NEVP": {
+        "IN_FILE_NAME_PREFIX": "../data/NEVP/fuel_forecast/NEVP_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/NEVP/NEVP_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/NEVP/fuel_forecast/NEVP_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/NEVP/fuel_forecast/NEVP_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "NUCLEAR",
+            "OIL",
+            "HYDRO",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "NWMT": {
+        "IN_FILE_NAME_PREFIX": "../data/NWMT/fuel_forecast/NWMT_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/NWMT/NWMT_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/NWMT/fuel_forecast/NWMT_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/NWMT/fuel_forecast/NWMT_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "OIL",
+            "HYDRO",
+            "SOLAR",
+            "WIND"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "NYIS": {
+        "IN_FILE_NAME_PREFIX": "../data/NYIS/fuel_forecast/NYIS_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/NYIS/NYIS_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/NYIS/fuel_forecast/NYIS_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/NYIS/fuel_forecast/NYIS_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "NUCLEAR",
+            "OIL",
+            "HYDRO",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "PACE": {
+        "IN_FILE_NAME_PREFIX": "../data/PACE/fuel_forecast/PACE_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/PACE/PACE_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/PACE/fuel_forecast/PACE_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/PACE/fuel_forecast/PACE_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "HYDRO",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "PACW": {
+        "IN_FILE_NAME_PREFIX": "../data/PACW/fuel_forecast/PACW_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/PACW/PACW_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/PACW/fuel_forecast/PACW_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/PACW/fuel_forecast/PACW_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "NAT_GAS",
+            "HYDRO",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "PNM": {
+        "IN_FILE_NAME_PREFIX": "../data/PNM/fuel_forecast/PNM_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/PNM/PNM_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/PNM/fuel_forecast/PNM_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/PNM/fuel_forecast/PNM_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "WIND",
+            "HYDRO",
+            "SOLAR",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "PGE": {
+        "IN_FILE_NAME_PREFIX": "../data/PGE/fuel_forecast/PGE_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/PGE/PGE_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/PGE/fuel_forecast/PGE_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/PGE/fuel_forecast/PGE_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "WIND",
+            "HYDRO",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "PJM": {
+        "IN_FILE_NAME_PREFIX": "../data/PJM/fuel_forecast/PJM_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/PJM/PJM_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/PJM/fuel_forecast/PJM_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/PJM/fuel_forecast/PJM_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "NUCLEAR",
+            "OIL",
+            "HYDRO",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "PSCO": {
+        "IN_FILE_NAME_PREFIX": "../data/PSCO/fuel_forecast/PSCO_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/PSCO/PSCO_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/PSCO/fuel_forecast/PSCO_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/PSCO/fuel_forecast/PSCO_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "OIL",
+            "HYDRO",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "PSEI": {
+        "IN_FILE_NAME_PREFIX": "../data/PSEI/fuel_forecast/PSEI_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/PSEI/PSEI_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/PSEI/fuel_forecast/PSEI_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/PSEI/fuel_forecast/PSEI_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "OIL",
+            "HYDRO",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "SCEG": {
+        "IN_FILE_NAME_PREFIX": "../data/SCEG/fuel_forecast/SCEG_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/SCEG/SCEG_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/SCEG/fuel_forecast/SCEG_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/SCEG/fuel_forecast/SCEG_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "NUCLEAR",
+            "HYDRO",
+            "SOLAR",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "SC": {
+        "IN_FILE_NAME_PREFIX": "../data/SC/fuel_forecast/SC_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/SC/SC_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/SC/fuel_forecast/SC_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/SC/fuel_forecast/SC_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "OIL",
+            "HYDRO",
+            "SOLAR",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "SCL": {
+        "IN_FILE_NAME_PREFIX": "../data/SCL/fuel_forecast/SCL_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/SCL/SCL_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/SCL/fuel_forecast/SCL_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/SCL/fuel_forecast/SCL_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "HYDRO"
+        ],
+        "SOURCE_COL": [
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "SOCO": {
+        "IN_FILE_NAME_PREFIX": "../data/SOCO/fuel_forecast/SOCO_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/SOCO/SOCO_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/SOCO/fuel_forecast/SOCO_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/SOCO/fuel_forecast/SOCO_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "NUCLEAR",
+            "OIL",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "SPA": {
+        "IN_FILE_NAME_PREFIX": "../data/SPA/fuel_forecast/SPA_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/SPA/SPA_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/SPA/fuel_forecast/SPA_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/SPA/fuel_forecast/SPA_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "HYDRO"
+        ],
+        "SOURCE_COL": [
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
     "SRP": {
         "IN_FILE_NAME_PREFIX": "../data/SRP/fuel_forecast/SRP_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/SRP/SRP_weather_forecast.csv",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/SRP/SRP_weather_forecast_168.csv",
         "OUT_FILE_NAME_PREFIX": "../data/SRP/fuel_forecast/SRP_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/SRP/SRP_96hr_forecasts_DA.csv",
-        "SOURCES": ["COAL", "NAT_GAS", "NUCLEAR", "OIL", "HYDRO", "SOLAR", "WIND", "OTHER"],
-        "SOURCE_COL": [0, 1, 2, 3, 4, 5, 6, 7],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0, 0, 0, 0, 0],
-        "PARTIAL_FORECAST_HOURS": 24 // change this later to list if required
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/SRP/fuel_forecast/SRP_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "NUCLEAR",
+            "HYDRO",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
     },
-
-    "WALC": {
-        "IN_FILE_NAME_PREFIX": "../data/WALC/fuel_forecast/WALC_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/WALC/WALC_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/WALC/fuel_forecast/WALC_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/WALC/WALC_96hr_forecasts_DA.csv",
-        "SOURCES": ["NAT_GAS", "HYDRO", "SOLAR", "WIND"],
-        "SOURCE_COL": [0, 1, 2, 3],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0],
-        "PARTIAL_FORECAST_HOURS": 24 // change this later to list if required
+    "SWPP": {
+        "IN_FILE_NAME_PREFIX": "../data/SWPP/fuel_forecast/SWPP_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/SWPP/SWPP_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/SWPP/fuel_forecast/SWPP_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/SWPP/fuel_forecast/SWPP_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "NUCLEAR",
+            "OIL",
+            "HYDRO",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
     },
-
+    "TIDC": {
+        "IN_FILE_NAME_PREFIX": "../data/TIDC/fuel_forecast/TIDC_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/TIDC/TIDC_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/TIDC/fuel_forecast/TIDC_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/TIDC/fuel_forecast/TIDC_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "NAT_GAS",
+            "HYDRO"
+        ],
+        "SOURCE_COL": [
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
     "TVA": {
         "IN_FILE_NAME_PREFIX": "../data/TVA/fuel_forecast/TVA_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/TVA/TVA_weather_forecast.csv",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/TVA/TVA_weather_forecast_168.csv",
         "OUT_FILE_NAME_PREFIX": "../data/TVA/fuel_forecast/TVA_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/TVA/TVA_96hr_forecasts_DA.csv",
-        "SOURCES": ["COAL", "NAT_GAS", "NUCLEAR", "OIL", "HYDRO", "SOLAR", "WIND", "OTHER"],
-        "SOURCE_COL": [0, 1, 2, 3, 4, 5, 6, 7],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0, 0, 0, 0, 0],
-        "PARTIAL_FORECAST_HOURS": 24 // change this later to list if required
-    },
-
-    // EU regions
-
-    "SE": {
-        "IN_FILE_NAME_PREFIX": "../data/SE/fuel_forecast/SE_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/SE/SE_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/SE/fuel_forecast/SE_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/SE/SE_96hr_forecasts_DA.csv",
-        "LOCAL_TIMEZONE": "CET",
-        "SOURCES": ["NUCLEAR", "UNKNOWN", "WIND", "HYDRO"], // "unknown" and "other" are same
-        "SOURCE_COL": [3, 4, 5, 6],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [1, 1, 1, 1], // 0 -- False, 1 -- True
-        // Solar/wind day ahead forecasts are available. For other sources,
-        // using day-ahead forecasts obtained for DACF for consistency
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/TVA/fuel_forecast/TVA_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "NUCLEAR",
+            "OIL",
+            "HYDRO",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
         "PARTIAL_FORECAST_HOURS": 24
     },
-
+    "TEC": {
+        "IN_FILE_NAME_PREFIX": "../data/TEC/fuel_forecast/TEC_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/TEC/TEC_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/TEC/fuel_forecast/TEC_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/TEC/fuel_forecast/TEC_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "OTHER",
+            "OIL",
+            "SOLAR"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "TAL": {
+        "IN_FILE_NAME_PREFIX": "../data/TAL/fuel_forecast/TAL_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/TAL/TAL_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/TAL/fuel_forecast/TAL_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/TAL/fuel_forecast/TAL_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "NAT_GAS",
+            "SOLAR"
+        ],
+        "SOURCE_COL": [
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "TPWR": {
+        "IN_FILE_NAME_PREFIX": "../data/TPWR/fuel_forecast/TPWR_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/TPWR/TPWR_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/TPWR/fuel_forecast/TPWR_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/TPWR/fuel_forecast/TPWR_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "HYDRO"
+        ],
+        "SOURCE_COL": [
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "TEPC": {
+        "IN_FILE_NAME_PREFIX": "../data/TEPC/fuel_forecast/TEPC_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/TEPC/TEPC_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/TEPC/fuel_forecast/TEPC_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/TEPC/fuel_forecast/TEPC_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "WACM": {
+        "IN_FILE_NAME_PREFIX": "../data/WACM/fuel_forecast/WACM_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/WACM/WACM_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/WACM/fuel_forecast/WACM_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/WACM/fuel_forecast/WACM_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "HYDRO",
+            "SOLAR",
+            "WIND"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "WALC": {
+        "IN_FILE_NAME_PREFIX": "../data/WALC/fuel_forecast/WALC_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/WALC/WALC_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/WALC/fuel_forecast/WALC_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/WALC/fuel_forecast/WALC_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "NAT_GAS",
+            "HYDRO",
+            "SOLAR",
+            "WIND"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "AT": {
+        "IN_FILE_NAME_PREFIX": "../data/AT/fuel_forecast/AT_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/AT/AT_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/AT/fuel_forecast/AT_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/AT/fuel_forecast/AT_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "BIOMASS",
+            "NAT_GAS",
+            "GEOTHERMAL",
+            "HYDRO",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "BE": {
+        "IN_FILE_NAME_PREFIX": "../data/BE/fuel_forecast/BE_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/BE/BE_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/BE/fuel_forecast/BE_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/BE/fuel_forecast/BE_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "BIOMASS",
+            "NAT_GAS",
+            "HYDRO",
+            "NUCLEAR",
+            "OIL",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "BG": {
+        "IN_FILE_NAME_PREFIX": "../data/BG/fuel_forecast/BG_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/BG/BG_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/BG/fuel_forecast/BG_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/BG/fuel_forecast/BG_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "BIOMASS",
+            "COAL",
+            "NAT_GAS",
+            "HYDRO",
+            "NUCLEAR",
+            "SOLAR",
+            "WIND"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "CH": {
+        "IN_FILE_NAME_PREFIX": "../data/CH/fuel_forecast/CH_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/CH/CH_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/CH/fuel_forecast/CH_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/CH/fuel_forecast/CH_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "HYDRO",
+            "NUCLEAR",
+            "SOLAR",
+            "WIND"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "CZ": {
+        "IN_FILE_NAME_PREFIX": "../data/CZ/fuel_forecast/CZ_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/CZ/CZ_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/CZ/fuel_forecast/CZ_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/CZ/fuel_forecast/CZ_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "BIOMASS",
+            "COAL",
+            "NAT_GAS",
+            "HYDRO",
+            "NUCLEAR",
+            "OIL",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
     "DE": {
         "IN_FILE_NAME_PREFIX": "../data/DE/fuel_forecast/DE_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/DE/DE_weather_forecast.csv",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/DE/DE_weather_forecast_168.csv",
         "OUT_FILE_NAME_PREFIX": "../data/DE/fuel_forecast/DE_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/DE/DE_96hr_forecasts_DA.csv",
-        "LOCAL_TIMEZONE": "CET",
-        "SOURCES": ["BIOMASS", "COAL", "NAT_GAS", "GEOTHERMAL", "HYDRO", "NUCLEAR", "OIL", "SOLAR", "WIND", "UNKNOWN"],
-        "SOURCE_COL": [2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1], // 0 -- False, 1 -- True
-        // Solar/wind day ahead forecasts are available. For other sources,
-        // using day-ahead forecasts obtained for DACF for consistency
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/DE/fuel_forecast/DE_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "BIOMASS",
+            "COAL",
+            "NAT_GAS",
+            "GEOTHERMAL",
+            "HYDRO",
+            "OIL",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
         "PARTIAL_FORECAST_HOURS": 24
     },
-
+    "DK": {
+        "IN_FILE_NAME_PREFIX": "../data/DK/fuel_forecast/DK_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/DK/DK_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/DK/fuel_forecast/DK_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/DK/fuel_forecast/DK_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "BIOMASS",
+            "COAL",
+            "NAT_GAS",
+            "OIL",
+            "SOLAR",
+            "WIND"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "EE": {
+        "IN_FILE_NAME_PREFIX": "../data/EE/fuel_forecast/EE_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/EE/EE_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/EE/fuel_forecast/EE_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/EE/fuel_forecast/EE_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "BIOMASS",
+            "COAL",
+            "NAT_GAS",
+            "HYDRO",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
     "ES": {
         "IN_FILE_NAME_PREFIX": "../data/ES/fuel_forecast/ES_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/ES/ES_weather_forecast.csv",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/ES/ES_weather_forecast_168.csv",
         "OUT_FILE_NAME_PREFIX": "../data/ES/fuel_forecast/ES_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/ES/ES_96hr_forecasts_DA.csv",
-        "LOCAL_TIMEZONE": "CET",
-        "SOURCES": ["SOLAR", "UNKNOWN", "NAT_GAS", "COAL", "WIND", "HYDRO", "NUCLEAR", "BIOMASS", "OIL"],
-        "SOURCE_COL": [0, 1, 2, 3, 4, 5, 6, 7, 8],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [1, 0, 0, 0, 1, 0, 0, 0, 0], // 0 -- False, 1 -- True
-        // Solar/wind day ahead forecasts are available.
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/ES/fuel_forecast/ES_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "BIOMASS",
+            "COAL",
+            "NAT_GAS",
+            "HYDRO",
+            "NUCLEAR",
+            "OIL",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
         "PARTIAL_FORECAST_HOURS": 24
     },
-
-    "PL": {
-        "IN_FILE_NAME_PREFIX": "../data/PL/fuel_forecast/PL_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/PL/PL_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/PL/fuel_forecast/PL_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/PL/PL_96hr_forecasts_DA.csv",
-        "LOCAL_TIMEZONE": "CET",
-        "SOURCES": ["WIND", "HYDRO", "BIOMASS", "NAT_GAS", "OIL", "COAL", "SOLAR"],
-        "SOURCE_COL": [0, 1, 2, 3, 4, 5, 6],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [1, 0, 0, 0, 0, 0, 1], // 0 -- False, 1 -- True
-        // Solar/wind day ahead forecasts are available. For other sources,
+    "FI": {
+        "IN_FILE_NAME_PREFIX": "../data/FI/fuel_forecast/FI_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/FI/FI_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/FI/fuel_forecast/FI_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/FI/fuel_forecast/FI_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "BIOMASS",
+            "COAL",
+            "NAT_GAS",
+            "HYDRO",
+            "NUCLEAR",
+            "OIL",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
         "PARTIAL_FORECAST_HOURS": 24
     },
-
+    "FR": {
+        "IN_FILE_NAME_PREFIX": "../data/FR/fuel_forecast/FR_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/FR/FR_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/FR/fuel_forecast/FR_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/FR/fuel_forecast/FR_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "BIOMASS",
+            "COAL",
+            "NAT_GAS",
+            "HYDRO",
+            "NUCLEAR",
+            "OIL",
+            "SOLAR",
+            "WIND"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "GR": {
+        "IN_FILE_NAME_PREFIX": "../data/GR/fuel_forecast/GR_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/GR/GR_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/GR/fuel_forecast/GR_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/GR/fuel_forecast/GR_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "HYDRO",
+            "SOLAR",
+            "WIND"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "GB": {
+        "IN_FILE_NAME_PREFIX": "../data/GB/fuel_forecast/GB_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/GB/GB_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/GB/fuel_forecast/GB_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/GB/fuel_forecast/GB_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "BIOMASS",
+            "COAL",
+            "NAT_GAS",
+            "HYDRO",
+            "NUCLEAR",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "HR": {
+        "IN_FILE_NAME_PREFIX": "../data/HR/fuel_forecast/HR_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/HR/HR_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/HR/fuel_forecast/HR_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/HR/fuel_forecast/HR_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "BIOMASS",
+            "COAL",
+            "NAT_GAS",
+            "GEOTHERMAL",
+            "HYDRO",
+            "OIL",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "HU": {
+        "IN_FILE_NAME_PREFIX": "../data/HU/fuel_forecast/HU_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/HU/HU_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/HU/fuel_forecast/HU_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/HU/fuel_forecast/HU_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "BIOMASS",
+            "COAL",
+            "NAT_GAS",
+            "GEOTHERMAL",
+            "HYDRO",
+            "NUCLEAR",
+            "OIL",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "IE": {
+        "IN_FILE_NAME_PREFIX": "../data/IE/fuel_forecast/IE_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/IE/IE_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/IE/fuel_forecast/IE_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/IE/fuel_forecast/IE_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "COAL",
+            "NAT_GAS",
+            "HYDRO",
+            "OIL",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "IT": {
+        "IN_FILE_NAME_PREFIX": "../data/IT/fuel_forecast/IT_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/IT/IT_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/IT/fuel_forecast/IT_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/IT/fuel_forecast/IT_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "BIOMASS",
+            "COAL",
+            "NAT_GAS",
+            "GEOTHERMAL",
+            "HYDRO",
+            "OIL",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "LT": {
+        "IN_FILE_NAME_PREFIX": "../data/LT/fuel_forecast/LT_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/LT/LT_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/LT/fuel_forecast/LT_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/LT/fuel_forecast/LT_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "BIOMASS",
+            "NAT_GAS",
+            "HYDRO",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "LV": {
+        "IN_FILE_NAME_PREFIX": "../data/LV/fuel_forecast/LV_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/LV/LV_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/LV/fuel_forecast/LV_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/LV/fuel_forecast/LV_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "BIOMASS",
+            "NAT_GAS",
+            "HYDRO",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
     "NL": {
         "IN_FILE_NAME_PREFIX": "../data/NL/fuel_forecast/NL_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/NL/NL_weather_forecast.csv",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/NL/NL_weather_forecast_168.csv",
         "OUT_FILE_NAME_PREFIX": "../data/NL/fuel_forecast/NL_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/NL/NL_96hr_forecasts_DA.csv",
-        "LOCAL_TIMEZONE": "CET",
-        "SOURCES": ["HYDRO", "BIOMASS", "WIND", "SOLAR", "UNKNOWN", "COAL", "NUCLEAR", "NAT_GAS"], // HYDRO is always 0. Remove later
-        "SOURCE_COL": [0, 1, 2, 3, 4, 5, 6, 7],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0, 0, 0, 0, 0], // 0 -- False, 1 -- True 
-        // Solar/wind day ahead forecasts are available, but they are orders of magnitude different from actual generation.
-        // Hence, not including those.
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/NL/fuel_forecast/NL_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "BIOMASS",
+            "COAL",
+            "NAT_GAS",
+            "NUCLEAR",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
         "PARTIAL_FORECAST_HOURS": 24
     },
-
-    // AUS regions
-
-    "AUS_QLD": {
-        "IN_FILE_NAME_PREFIX": "../data/AUS_QLD/fuel_forecast/AUS_QLD_",
-        "WEATHER_FORECAST_IN_FILE_NAME": "../data/AUS_QLD/AUS_QLD_weather_forecast.csv",
-        "OUT_FILE_NAME_PREFIX": "../data/AUS_QLD/fuel_forecast/AUS_QLD_ANN",
-        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/AUS_QLD/AUS_QLD_96hr_forecasts_DA.csv",
-        "LOCAL_TIMEZONE": "UTC", // what is the time zone for AUS_QLD?
-        "SOURCES": ["COAL", "NAT_GAS", "OIL", "HYDRO", "WIND", "BIOMASS", "SOLAR"],
-        "SOURCE_COL": [2, 3, 4, 5, 6, 7, 8],
-        "PARTIAL_FORECAST_AVAILABILITY_LIST": [0, 0, 0, 0, 0, 0, 0], // 0 -- False, 1 -- True
+    "PL": {
+        "IN_FILE_NAME_PREFIX": "../data/PL/fuel_forecast/PL_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/PL/PL_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/PL/fuel_forecast/PL_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/PL/fuel_forecast/PL_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "BIOMASS",
+            "COAL",
+            "NAT_GAS",
+            "HYDRO",
+            "OIL",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "PT": {
+        "IN_FILE_NAME_PREFIX": "../data/PT/fuel_forecast/PT_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/PT/PT_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/PT/fuel_forecast/PT_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/PT/fuel_forecast/PT_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "BIOMASS",
+            "NAT_GAS",
+            "HYDRO",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "RS": {
+        "IN_FILE_NAME_PREFIX": "../data/RS/fuel_forecast/RS_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/RS/RS_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/RS/fuel_forecast/RS_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/RS/fuel_forecast/RS_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "BIOMASS",
+            "COAL",
+            "NAT_GAS",
+            "HYDRO",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "RO": {
+        "IN_FILE_NAME_PREFIX": "../data/RO/fuel_forecast/RO_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/RO/RO_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/RO/fuel_forecast/RO_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/RO/fuel_forecast/RO_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "BIOMASS",
+            "NAT_GAS",
+            "HYDRO",
+            "NUCLEAR",
+            "SOLAR",
+            "WIND"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "SE": {
+        "IN_FILE_NAME_PREFIX": "../data/SE/fuel_forecast/SE_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/SE/SE_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/SE/fuel_forecast/SE_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/SE/fuel_forecast/SE_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "NAT_GAS",
+            "HYDRO",
+            "NUCLEAR",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "SI": {
+        "IN_FILE_NAME_PREFIX": "../data/SI/fuel_forecast/SI_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/SI/SI_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/SI/fuel_forecast/SI_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/SI/fuel_forecast/SI_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "BIOMASS",
+            "COAL",
+            "NAT_GAS",
+            "HYDRO",
+            "NUCLEAR",
+            "OIL",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_HOURS": 24
+    },
+    "SK": {
+        "IN_FILE_NAME_PREFIX": "../data/SK/fuel_forecast/SK_",
+        "WEATHER_FORECAST_IN_FILE_NAME": "../data/SK/SK_weather_forecast_168.csv",
+        "OUT_FILE_NAME_PREFIX": "../data/SK/fuel_forecast/SK_ANN",
+        "AGGREGATED_FORECAST_OUT_FILE_NAME": "../data/SK/fuel_forecast/SK_aggregated_forecast.csv",
+        "NUM_FEATURES": 6,
+        "NUM_WEATHER_FEATURES": 5,
+        "SOURCES": [
+            "BIOMASS",
+            "COAL",
+            "NAT_GAS",
+            "HYDRO",
+            "NUCLEAR",
+            "OIL",
+            "SOLAR",
+            "WIND",
+            "OTHER"
+        ],
+        "SOURCE_COL": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "PARTIAL_FORECAST_AVAILABILITY_LIST": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
         "PARTIAL_FORECAST_HOURS": 24
     }
-
-
 }

@@ -198,103 +198,30 @@ Forecast168 Horizon:       2026-09-23 07:00 UTC → 2026-09-30 06:00 UTC (168 ho
 
 ---
 
-## 1.7 Verifying a Successful Inference Run in PostgreSQL
+## 1.7 Verifying a Successful Inference Run
 
-A successful real-time inference run generates and upserts **336 rows** into the PostgreSQL `"CarbonCastRESTAPI_forecast168"` table ($168 \text{ hours} \times 2 \text{ emission types [direct + lifecycle]} = 336 \text{ rows}$ per region).
+A successful run creates **336 rows** in `Forecast168` ($168 \text{ direct} + 168 \text{ lifecycle}$):
 
-### 1. Single Region Verification Query
-
-Run this query directly via `psql` to check row counts, time horizon, and mean/min/max carbon intensity values for a given region (e.g. `CISO` or `GB`):
-
+### SQLite Verification Query
 ```sql
 SELECT 
     region_code, 
     emission_factor_type, 
-    COUNT(*) AS total_hours, 
-    MIN(datetime) AS horizon_start, 
-    MAX(datetime) AS horizon_end,
-    ROUND(AVG(value)::numeric, 2) AS avg_ci,
-    ROUND(MIN(value)::numeric, 2) AS min_ci,
-    ROUND(MAX(value)::numeric, 2) AS max_ci
-FROM "CarbonCastRESTAPI_forecast168"
-WHERE region_code = 'CISO'
+    COUNT(*) as total_hours, 
+    MIN(datetime) as horizon_start, 
+    MAX(datetime) as horizon_end,
+    ROUND(AVG(value), 2) as avg_ci
+FROM CarbonCastRESTAPI_forecast168
+WHERE region_code = 'GB'
 GROUP BY region_code, emission_factor_type;
-```
-
-**Single-Line Terminal Command:**
-```bash
-psql -d carboncast -c "SELECT region_code, emission_factor_type, count(*) AS total_hours, min(datetime) AS horizon_start, max(datetime) AS horizon_end, round(avg(value)::numeric, 2) AS avg_ci, round(min(value)::numeric, 2) AS min_ci, round(max(value)::numeric, 2) AS max_ci FROM \"CarbonCastRESTAPI_forecast168\" WHERE region_code = 'CISO' GROUP BY region_code, emission_factor_type;"
 ```
 
 **Expected Healthy Result**:
 ```text
- region_code | emission_factor_type | total_hours |        horizon_start        |         horizon_end         | avg_ci | min_ci | max_ci 
--------------+----------------------+-------------+-----------------------------+-----------------------------+--------+--------+--------
- CISO        | direct               |         168 | 2026-09-26 23:00:00+00      | 2026-10-03 22:00:00+00      | 154.21 |  88.40 | 285.60
- CISO        | lifecycle            |         168 | 2026-09-26 23:00:00+00      | 2026-10-03 22:00:00+00      | 248.75 | 161.41 | 392.10
-(2 rows)
+region_code | emission_factor_type | total_hours | horizon_start       | horizon_end         | avg_ci
+GB          | direct               | 168         | 2026-09-23 07:00:00 | 2026-09-30 06:00:00 | 182.45
+GB          | lifecycle            | 168         | 2026-09-23 07:00:00 | 2026-09-30 06:00:00 | 338.12
 ```
-
----
-
-### 2. Multi-Region Batch Sanity Check
-
-To verify all regions across the entire database after a batch inference run:
-
-```bash
-# Check total distinct regions and total forecast rows (e.g. 69 regions = 23,184 rows):
-psql -d carboncast -c "SELECT count(DISTINCT region_code) AS total_regions, count(*) AS total_rows FROM \"CarbonCastRESTAPI_forecast168\";"
-
-# List row count per region (every active region should have exactly 336 rows):
-psql -d carboncast -c "SELECT region_code, count(*) AS row_count FROM \"CarbonCastRESTAPI_forecast168\" GROUP BY region_code ORDER BY region_code;"
-```
-
----
-
-### 3. Model Quality & Non-Saturation Validation
-
-To ensure predictions are not saturated (e.g. flatlined scalers, zeroes, or constant values):
-
-```sql
-SELECT 
-    region_code,
-    emission_factor_type,
-    ROUND(MIN(value)::numeric, 2) AS min_val,
-    ROUND(MAX(value)::numeric, 2) AS max_val,
-    ROUND(STDDEV(value)::numeric, 2) AS std_dev
-FROM "CarbonCastRESTAPI_forecast168"
-GROUP BY region_code, emission_factor_type
-HAVING STDDEV(value) = 0 OR STDDEV(value) IS NULL OR MIN(value) = MAX(value);
-```
-*(A healthy database will return **0 rows** for this query, confirming that every region displays genuine diurnal variance).*
-
----
-
-## 1.8 Visualizing Results: Running Backend API & Frontend Map UI
-
-To interactively explore and visualize the 168-hour forecasts, actuals, and regional carbon intensities on the interactive world map:
-
-### Terminal 1: Start the Backend API (Direct Python / PostgreSQL)
-```bash
-cd /Users/prarthanapatil/Documents/EnergyAPI11/CarbonCast/UCSC_CarbonCast_API/CarbonCast/src/CarbonCastAPI
-DJANGO_SETTINGS_MODULE=CarbonCastAPI.settings \
-/Users/prarthanapatil/Documents/EnergyAPI11/CarbonCast/UCSC_CarbonCast_API/CarbonCast/.venv/bin/python manage.py runserver 8000
-```
-* **Swagger API Docs:** [http://localhost:8000/doc/](http://localhost:8000/doc/)
-* **Test 168h Forecast Endpoint:** [http://localhost:8000/v1/CarbonIntensityForecasts?regionCode=CISO&forecastPeriod=168h](http://localhost:8000/v1/CarbonIntensityForecasts?regionCode=CISO&forecastPeriod=168h)
-
-> [!NOTE]
-> Running the Django backend directly with Python connects straight to your local PostgreSQL database (`carboncast`), which holds the full 168-hour ML forecasts and historical grid data.
-
-### Terminal 2: Start the Frontend UI Map (React + MapLibre)
-```bash
-cd /Users/prarthanapatil/Documents/EnergyAPI11/CarbonCast/CarbonCastUI/web
-npm install   # (only needed on initial setup)
-npm run dev
-```
-* **Interactive Map URL:** [http://localhost:5173](http://localhost:5173)
-
-Ensure `CarbonCastUI/web/.env` contains `VITE_API_BASE_URL=http://localhost:8000` so the React frontend queries the local API server. Once running, you can click any region on the map to view the 168-hour forecast timeline and carbon intensity metrics.
 
 ---
 

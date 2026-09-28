@@ -1,12 +1,10 @@
 # CarbonCast — Real-Time Integration Monorepo
 
-A system to predict the **hourly carbon intensity** of electricity for ~70 grid
+A system to predict the **hourly carbon intensity** of electricity for ~58 grid
 regions across the US and Europe using machine learning, and serve those
 forecasts through an API and an interactive web map.
 
-This repository is a **monorepo** that combines the three projects which together
-make up the live, real-time product. For the full narrative overview of how they
-fit together, read **[`HANDOFF.md`](HANDOFF.md)**.
+This repository is a **monorepo** that combines the three projects which together make up the live, real-time product. For the full narrative overview of how they fit together, read **[`HANDOFF.md`](HANDOFF.md)** and the **[`DEVELOPER_GUIDE.md`](UCSC_CarbonCast_API/CarbonCast/DEVELOPER_GUIDE.md)**.
 
 ---
 
@@ -51,7 +49,7 @@ cd CarbonCastUI/web && npm install && npm run dev
 cd UCSC_OSRE_CC_automation_tool/CarbonCast && pip install -r requirements.txt && pytest
 ```
 
-See [`HANDOFF.md`](HANDOFF.md) and [`docs/`](docs/) for details.
+See [`HANDOFF.md`](HANDOFF.md), [`UCSC_CarbonCast_API/CarbonCast/DEVELOPER_GUIDE.md`](UCSC_CarbonCast_API/CarbonCast/DEVELOPER_GUIDE.md), and [`docs/`](docs/) for details.
 
 ---
 
@@ -77,6 +75,7 @@ files document the variables each project needs.
 | Doc | What it covers |
 |-----|----------------|
 | [`HANDOFF.md`](HANDOFF.md) | Big-picture overview & how the three projects connect. |
+| [`UCSC_CarbonCast_API/CarbonCast/DEVELOPER_GUIDE.md`](UCSC_CarbonCast_API/CarbonCast/DEVELOPER_GUIDE.md) | **Developer Runbook & Architecture Guide**: Daily real-time inference pipeline, weekly retraining pipeline, staleness guards, failure recovery, and PostgreSQL verification queries. |
 | [`docs/01-frontend-guide.md`](docs/01-frontend-guide.md) | The React web app. |
 | [`docs/02-api-guide.md`](docs/02-api-guide.md) | The Django API & forecasting backend. |
 | [`docs/03-automation-tool-guide.md`](docs/03-automation-tool-guide.md) | The RDA weather-download tool. |

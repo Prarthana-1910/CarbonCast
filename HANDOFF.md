@@ -68,6 +68,7 @@ disk. You can run and develop any one of them without the other two fully workin
 
 ## Where to start depending on what you need to do
 
+- **"I need to run, debug, or verify the real-time inference or retraining pipeline."** → Read the **[`DEVELOPER_GUIDE.md`](UCSC_CarbonCast_API/CarbonCast/DEVELOPER_GUIDE.md)** (`UCSC_CarbonCast_API/CarbonCast/DEVELOPER_GUIDE.md`). It details the daily real-time inference pipeline, weekly retraining pipeline, staleness guards, failure recovery strategies, and PostgreSQL verification queries.
 - **"I just want to change how the map looks."** → Go to
   [`docs/01-frontend-guide.md`](docs/01-frontend-guide.md). You mostly live in
   `CarbonCastUI/web/src/`.

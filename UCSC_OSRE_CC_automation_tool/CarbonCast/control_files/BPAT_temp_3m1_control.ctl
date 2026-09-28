@@ -1,5 +1,5 @@
 dataset=ds084.1
-date=202412010000/to/202503010000
+date=202605180000/to/202608160000
 datetype=init
 param=TMP/DPT
 level=HTGL:2

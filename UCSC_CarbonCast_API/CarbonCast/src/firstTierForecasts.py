@@ -5,6 +5,7 @@ File to generate source production forecasts for different sources across region
 import csv
 from datetime import datetime as dt
 from datetime import timezone as tz
+import os
 
 import numpy as np
 import pandas as pd
@@ -51,9 +52,9 @@ def runFirstTier(configFileName):
     TRAINING_WINDOW_HOURS = firstTierConfig["TRAINING_WINDOW_HOURS"]
     PREDICTION_WINDOW_HOURS = firstTierConfig["PREDICTION_WINDOW_HOURS"]
     MODEL_SLIDING_WINDOW_LEN = firstTierConfig["MODEL_SLIDING_WINDOW_LEN"]
+    regionList = firstTierConfig["REGION"]
     BUFFER_HOURS = PREDICTION_WINDOW_HOURS - 24
 
-    regionList = firstTierConfig["REGION"]
     for region in regionList:
         print("CarbonCast: ANN model for region:", region)
         regionConfig = firstTierConfig[region]
@@ -75,7 +76,7 @@ def runFirstTier(configFileName):
             print(inFileName)
             print(weatherForecastInFileName)
             isRenewableSource = False
-            numFeatures = firstTierConfig["NUM_FEATURES"]
+            numFeatures = regionConfig["NUM_FEATURES"]
             numWeatherFeatures = 0
             if (source == "SOLAR" or source == "WIND" or source == "HYDRO"):
                 isRenewableSource = True
@@ -148,6 +149,13 @@ def runFirstTier(configFileName):
                     wFtMin = []
                     wFtMax = []
                     if(isRenewableSource):
+                        print("Weather dtypes:")
+                        print(wTrainData.dtype)
+                        print(wValData.dtype)
+                        print(wTestData.dtype)
+
+                        print("Sample row:")
+                        print(wTestData[:5])
                         wTrainData = fillMissingData(wTrainData)
                         wValData = fillMissingData(wValData)
                         wTestData = fillMissingData(wTestData)
@@ -229,6 +237,31 @@ def runFirstTier(configFileName):
 
                 print("RMSE: ", periodRMSE)
                 print("MAPE: ", periodMAPE)
+                
+                # Save evaluation metrics for this trained model
+                metrics_file = os.path.join(
+                    firstTierConfig["SAVED_MODEL_LOCATION"],
+                    "first_tier_model_metrics.csv"
+                )
+
+                metrics_df = pd.DataFrame({
+                    "Region": [region],
+                    "Source": [source],
+                    "Iteration": [exptNum],
+                    "RMSE": [bestRMSE[0]],
+                    "MAPE": [bestMAPE[0]]
+                })
+
+                if os.path.exists(metrics_file):
+                    metrics_df.to_csv(metrics_file,
+                                      mode="a",
+                                      header=False,
+                                      index=False)
+                else:
+                    metrics_df.to_csv(metrics_file,
+                                      mode="w",
+                                      header=True,
+                                      index=False)
             sourceIdx += 1
 
             print("####################", region, source, " done ####################\n\n")
@@ -263,18 +296,24 @@ def runFirstTierInRealTime(configFileName, regionList, startDate, electricityDat
         sourceColList = regionConfig["SOURCE_COL"]
         weatherForecastInFileName = realTimeWeatherFileDir+region+"/"+region+"_weather_forecast_"+str(startDate)+".csv"
         SAVED_MODEL_LOCATION = firstTierConfig["SAVED_MODEL_LOCATION"]+region+"/"
-        aggregatedForecastFileNames[region] = realTimeFileDir+region+"/"+region+"_96hr_forecasts_"+str(startDate)+".csv"
+        aggregatedForecastFileNames[region] = realTimeFileDir+region+"/"+region+"_168hr_forecasts_"+str(startDate)+".csv"
         partialSourceProductionForecast = None
         sourceIdx = 0
-        inFileName = realTimeFileDir+region+"/"+region+"_"+str(electricityDataDate)+".csv"
+        combinedFileName = realTimeFileDir+region+"/"+region+"_"+str(electricityDataDate)+".csv"
         outFileNamePrefix = realTimeFileDir+region+"/fuel_forecast/"+region+"_ANN"
         for source in sourceList:
-            sourceCol = sourceColList[sourceIdx]+2 # +2 because we have now added creation time & version for real-time files
+            # Use a per-source file (one numeric column) so that sourceCol=0+2=2 reads
+            # the correct source's data. The combined file caused all sources to read
+            # column 2 = the first source, producing massively OOD inputs and NaN output.
+            perSourceFileName = realTimeFileDir+region+"/"+region+"_"+source.lower()+"_"+str(electricityDataDate)+".csv"
+            import os as _os
+            inFileName = perSourceFileName if _os.path.exists(perSourceFileName) else combinedFileName
+            sourceCol = 0+1  # always 1: column order is UTC-time(index), creation_time,<source_value>
             partialSourceProductionForecastAvailable = True if solWindFcstData is not None else False # partial forecasts only for SOLAR and WIND
             print(inFileName)
             print(weatherForecastInFileName)
             isRenewableSource = False
-            numFeatures = firstTierConfig["NUM_FEATURES"]
+            numFeatures = regionConfig["NUM_FEATURES"]
             numWeatherFeatures = 0
             if (source == "SOLAR" or source == "WIND" or source == "HYDRO"):
                 isRenewableSource = True
@@ -347,27 +386,47 @@ def runFirstTierInRealTime(configFileName, regionList, startDate, electricityDat
                                              isRealTime=True, startDate=startDate)
     return aggregatedForecastFileNames
 
+def align_weather_and_source_data(weatherDataset, sourceForecastDataset, mode="intersection"):
+    weatherDataset.index = pd.to_datetime(weatherDataset.index, format="mixed")
+    sourceForecastDataset.index = pd.to_datetime(sourceForecastDataset.index, format="mixed")
+
+    weatherDataset = weatherDataset[~weatherDataset.index.duplicated(keep='first')]
+    sourceForecastDataset = sourceForecastDataset[~sourceForecastDataset.index.duplicated(keep='first')]
+
+    if mode == "intersection":
+        common_idx = weatherDataset.index.intersection(sourceForecastDataset.index).sort_values()
+    else:
+        common_idx = weatherDataset.index.union(sourceForecastDataset.index).sort_values()
+
+    weatherAligned = weatherDataset.reindex(common_idx)
+    sourceAligned = sourceForecastDataset.reindex(common_idx)
+
+    return weatherAligned, sourceAligned, common_idx
+
 def aggregateDataAndGenerateForecastFile(firstTierConfig, sourceList, weatherForecastFile,
                                          sourceForecastFileNamePrefix, aggregatedForecastFileName,
                                          isRealTime = False, startDate=None):
     
-    weatherDatasetStartRow = firstTierConfig["ROW_START_FOR_2020"]
-    weatherDatasetEndRow = firstTierConfig["ROW_END_FOR_2022"]
-    sourceForecastDatasetEndRow = firstTierConfig["SOURCE_FORECAST_ROW_END_FOR_2022"]
-
     weatherDataset = pd.read_csv(weatherForecastFile, header=0, index_col=["datetime"])
-    if (isRealTime is False):
-        weatherDataset = weatherDataset[weatherDatasetStartRow:weatherDatasetEndRow]
-    modifiedDataset = weatherDataset.copy()
+    weatherDataset = weatherDataset.iloc[:, 1:]
+    weatherDataset.index = pd.to_datetime(weatherDataset.index, format="mixed")
+    modifiedDataset = None
     for source in sourceList:
-        sourceForecastFileName = sourceForecastFileNamePrefix + "_" + source.lower() + "_iter0.csv" # TODO: for now, only 1 iteration. generalize later
+        sourceForecastFileName = sourceForecastFileNamePrefix + "_" + source.lower() + "_iter0.csv"
         if (isRealTime is True and startDate is not None):
-            sourceForecastFileName = sourceForecastFileNamePrefix + "_" + source.lower() + "_"+str(startDate)+".csv"
+            sourceForecastFileName = sourceForecastFileNamePrefix + "_" + source.lower() + "_" + str(startDate) + ".csv"
         sourceForecastDataset = pd.read_csv(sourceForecastFileName, header=0, index_col=["datetime"])
-        if (isRealTime is False):
-            sourceForecastDataset = sourceForecastDataset[:sourceForecastDatasetEndRow]
-        forecastColumnName = "avg_"+source.lower()+"_production_forecast"
-        modifiedDataset[forecastColumnName] = sourceForecastDataset[forecastColumnName].values
+        sourceForecastDataset.index = pd.to_datetime(sourceForecastDataset.index, format="mixed")
+
+        weatherAligned, sourceAligned, common_idx = align_weather_and_source_data(
+            weatherDataset, sourceForecastDataset, mode="intersection"
+        )
+
+        if modifiedDataset is None:
+            modifiedDataset = weatherAligned.copy()
+
+        forecastColumnName = "avg_" + source.lower() + "_production_forecast"
+        modifiedDataset[forecastColumnName] = sourceAligned[forecastColumnName]
     print(modifiedDataset.shape)
     # print(modifiedDataset.head(2))
     # print(modifiedDataset.tail(2))
@@ -393,6 +452,7 @@ def initialize(inFileName, weatherForecastInFileName, startCol, datasetLimiter,
     #                         parse_dates=['UTC time'], index_col=['UTC time'])
     weatherDataset = pd.read_csv(weatherForecastInFileName, header=0, infer_datetime_format=True, 
                             parse_dates=['datetime'], index_col=['datetime'])
+    weatherDataset = weatherDataset.iloc[:, 1:]
     # print(weatherDataset.head())
     
     print("\nAdding features related to date & time...")
@@ -477,6 +537,9 @@ def manipulateTrainingDataShape(data, labelWindowHours, weatherData = None):
     hourIdx = 0
     # step over the entire history one time step at a time
     for i in range(len(data)-(TRAINING_WINDOW_HOURS+labelWindowHours)+1):
+        # bounds check: stop before producing a short/ragged weather window
+        if weatherData is not None and weatherIdx + TRAINING_WINDOW_HOURS > len(weatherData):
+            break
         # define the end of the input sequence
         trainWindow = i + TRAINING_WINDOW_HOURS
         labelWindow = trainWindow + labelWindowHours

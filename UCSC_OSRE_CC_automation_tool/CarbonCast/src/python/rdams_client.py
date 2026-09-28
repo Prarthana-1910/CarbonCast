@@ -723,15 +723,22 @@ def submit_json(json_file):
     url = BASE_URL + 'submit/'
 
     token = get_authentication()
-    ret = requests.post(encode_url(url,token), json=control_dict)
-
-    print("HTTP status code:", ret.status_code)
-    print("Raw response content:", ret.content)
-    try:
-        return ret.json()
-    except Exception as e:
-        print("Failed to decode JSON:", e)
-        return {"http_response": ret.status_code, "content": ret.content.decode(errors="replace")}
+    max_retries = 5
+    for attempt in range(1, max_retries + 1):
+        try:
+            ret = requests.post(encode_url(url, token), json=control_dict, timeout=60)
+            print("HTTP status code:", ret.status_code)
+            print("Raw response content:", ret.content)
+            try:
+                return ret.json()
+            except Exception as e:
+                print("Failed to decode JSON:", e)
+                return {"http_response": ret.status_code, "content": ret.content.decode(errors="replace")}
+        except (requests.exceptions.ConnectTimeout, requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError, requests.exceptions.RequestException) as exc:
+            print(f"RDA submit attempt {attempt}/{max_retries} failed: {exc}")
+            if attempt == max_retries:
+                raise
+            time.sleep(5 * attempt)
 
 def submit(control_file_name):
     """Submit a RDA subset or format conversion request.

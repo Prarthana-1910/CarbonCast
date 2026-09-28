@@ -21,6 +21,23 @@
 **/saved_second_tier_models/
 **/downloaded_files/
 **/weather_data/
+**/realtime_electricity_staged/
+**/realtime_weather_downloads/
+**/realtime_weather_processed/
+**/realtime_weather_staged/
+**/retraining_weather_downloads/
+**/retraining_electricity_staged/
+**/control_files/
+**/final_training_data/
+**/control_files_backup/
+**/eiaData/
+**/eiaData_gapfill/
+**/processed_data/
+**/retraining_archive_processed/
+**/retraining_weather_processed/
+**/retraining_archive/
+**/processed_data/
+**/entsoeData/
 
 # Large binary data formats
 *.grib2
@@ -63,6 +80,13 @@ db.sqlite3
 *.pfx
 rdams_token.txt
 **/rdams_token.txt
+**/rdams_token2.txt
+**/rdams_token3.txt
+**/rdams_token4.txt
+**/rdams_token5.txt
+**/rdams_token6.txt
+**/rdams_token7.txt
+**/rdams_token8.txt
 api_keys.txt
 secrets.txt
 tokens.txt

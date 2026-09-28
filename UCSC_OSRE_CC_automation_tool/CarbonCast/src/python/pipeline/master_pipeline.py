@@ -16,9 +16,9 @@ import logging
 import subprocess
 
 # ── CONFIG — EDIT THESE BEFORE RUNNING ───────────────────────────────────────
-BASE_DIR        = os.path.expanduser("~/CarbonCast_spring26/UCSC_OSRE_CC_automation_tool/CarbonCast")
+BASE_DIR        = "/Users/prarthanapatil/Documents/EnergyAPI/CarbonCast/UCSC_OSRE_CC_automation_tool/CarbonCast"
 PIPELINE_DIR    = os.path.join(BASE_DIR, "src/python/pipeline")
-VENV_PYTHON     = os.path.join(BASE_DIR, "src/python/venv/bin/python")
+VENV_PYTHON     = "/Users/prarthanapatil/Documents/EnergyAPI/src/python/venv/bin/python3"
 LOG_FILE        = os.path.join(BASE_DIR, "logs", "master_pipeline.log")
 
 # Date range for control file generation

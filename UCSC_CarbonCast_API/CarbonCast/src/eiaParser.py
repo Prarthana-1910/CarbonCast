@@ -10,29 +10,38 @@ EIA_API_KEY = os.environ.get("EIA_API_KEY", "")
 
 # map EIA fuel types to source types
 EIA_SOURCE_MAP = {
-    "OTH": "other", 
+    "OTH": "other",
     "COL": "coal",
     "SUN": "solar",
     "NG": "nat_gas",
     "NUC": "nuclear",
     "WND": "wind",
     "WAT": "hydro",
-    "OIL": "oil"
+    "SNB": "solar",
+    "OIL": "oil",
+    "OES":"other",
+    "WNB":"other",
+    "UNK":"other",
+    "UES": "other",   # Unknown Energy Storage (battery/pumped-hydro discharge)
+    "BAT": "other",   # Battery storage, in case this code also appears
+    "GEO": "other",   # Geothermal, in case it appears for some BAs
+    "MWH": "other",   # Some BAs code storage discharge as MWH
+    "PS": "other"     # Pumped storage, in case it appears
     }
 
 # list of balancing authorities to get data for
-# EIA_BAL_AUTH_LIST = ["CISO", "PJM", "ERCO", "ISNE", "MISO", "SWPP", "SOCO", "BPAT", "FPL", "NYIS", "BANC", "LDWP", 
-#                      "TIDC", "DUK", "SC", "SCEG", "SPA", "FMPP", "FPC", "TAL", "TEC", "AECI", "LGEE", "DOPD",
-#                      "GCPD", "GRID", "IPCO", "NEVP", "NWMT", "PACE", "PACW", "PGE", "PSCO", "PSEI", "SCL", 
-#                      "TPWR", "WACM", "SOCO", "AZPS", "EPE", "PNM", "SRP", "TEPC", "WALC", "TVA"]
-
-EIA_BAL_AUTH_LIST = ["AECI", "AZPS", "BPAT", "CISO", "DUK", "EPE", "ERCOT", "FPC", 
-                "FPL", "GRID", "IPCO", "ISNE", "LDWP", "MISO", "NEVP", "NWMT", "NYISO", 
-                "PACE", "PACW", "PJM", "PSCO", "PSEI", "SC", "SCEG", "SOCO", "SPA", "SRP", 
-                "SWPP", "TIDC", "TVA", "WACM", "WALC"]
+#EIA_BAL_AUTH_LIST = ["AECI", "AZPS", "BANC", "BPAT", "CISO", "DOPD", "DUK", "EPE", "ERCO", "FMPP",
+                      #"FPC", "FPL", "GCPD", "GRID", "IPCO", "ISNE", "LDWP", "LGEE", "MISO", "NEVP",
+                     # "NWMT", "NYIS", "PACE", "PACW", "PGE", "PJM", "PNM", "PSCO", "PSEI", "SC",
+                     # "SCEG", "SCL", "SOCO", "SOCO", "SPA", "SRP", "SWPP", "TAL", "TEC", "TEPC",
+                     # "TIDC", "TPWR", "TVA", "WACM", "WALC"]
+EIA_BAL_AUTH_LIST = ['AECI', 'AZPS', 'BANC', 'BPAT', 'EPE', 'ERCOT', 'ERCO', 'FPL',
+    'MISO', 'NEVP', 'NWMT', 'NYISO', 'NYIS', 'PGE', 'SCL', 'SC',
+    'SRP', 'SWPP', 'TAL', 'TEPC', 'TIDC', 'TPWR', 'TVA', 'WACM',
+    'WALC']
 
 # get production data by source type from EIA API
-def getProductionDataBySourceTypeDataFromEIA(ba, curDate, curEndDate):
+def getProductionDataBySourceTypeDataFromEIA(ba, curDate, curEndDate, max_retries=5):
     print(ba)
     API_URL="https://api.eia.gov/v2/electricity/rto/fuel-type-data/data?api_key="
     API_URL_SORT_PARAMS="sort[0][column]=period&sort[0][direction]=asc&sort[1][column]=fueltype&sort[1][direction]=desc"
@@ -42,14 +51,23 @@ def getProductionDataBySourceTypeDataFromEIA(ba, curDate, curEndDate):
     endDate = curEndDate+"T23"
     print(startDate, endDate)
     URL = API_URL+EIA_API_KEY+API_URL_SUFFIX.format(ba, startDate, endDate)
-    resp = requests.get(URL)
-    print(resp.url)
-    if (resp.status_code != 200):
-        print("Error! Code: ", resp.status_code)
-        print("Error! Message: ", resp.text)
-        print("Error! Reason: ", resp.reason)
-    responseData = resp.json()["response"]["data"]
-    return responseData
+
+    for attempt in range(max_retries):
+        resp = requests.get(URL)
+        print(resp.url)
+        if resp.status_code == 200:
+            try:
+                return resp.json()["response"]["data"]
+            except requests.exceptions.JSONDecodeError:
+                print(f"Bad JSON for {ba} {startDate}-{endDate}, attempt {attempt+1}/{max_retries}")
+        else:
+            print("Error! Code: ", resp.status_code)
+            print("Error! Message: ", resp.text)
+            print("Error! Reason: ", resp.reason)
+            print(f"Retrying {ba} {startDate}-{endDate}, attempt {attempt+1}/{max_retries}")
+        time.sleep(10 * (attempt + 1))
+
+    raise RuntimeError(f"EIA fetch failed after {max_retries} retries: {ba} {startDate}-{endDate}")
 
 # parse production data by source type from EIA API
 def parseEIAProductionDataBySourceType(data, startDate, electricitySources, numSources):

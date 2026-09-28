@@ -72,7 +72,10 @@ def runSecondTier(configFileName, cefType, loadFromSavedModel):
     NUMBER_OF_EXPERIMENTS = secondTierConfig["NUMBER_OF_EXPERIMENTS_PER_REGION"]
     BUFFER_HOURS = PREDICTION_WINDOW_HOURS - 24
 
-    regionList = secondTierConfig["REGION_DIRECT"]
+    if cefType == "-l":
+        regionList = secondTierConfig["REGION_LIFECYCLE"]
+    else:
+        regionList = secondTierConfig["REGION_DIRECT"]
     if (loadFromSavedModel is True):
         NUMBER_OF_EXPERIMENTS = 1
     if (cefType == "-l"):
@@ -352,7 +355,7 @@ def initialize(inFileName, forecastInFileName, startCol):
     # load the new file
     dataset = pd.read_csv(inFileName, header=0, infer_datetime_format=True, 
                             parse_dates=['UTC time'], index_col=['UTC time'])    
-    dataset = dataset[8760:-72]
+    dataset = dataset
     print(dataset.head())
     print(dataset.columns)
     dateTime = dataset.index.values
@@ -382,15 +385,45 @@ def initializeInRealTime(inFileName, forecastInFileName, startCol):
     forecastDataset = pd.read_csv(forecastInFileName, header=0, infer_datetime_format=True, 
                             parse_dates=['datetime'], index_col=['datetime'])
     forecastDateTime = forecastDataset.index.values
-    
+
+    # Drop the 'version' column (index 0 after datetime index), keeping only feature columns.
+    forecastDataset = forecastDataset.iloc[:, 1:]  # drop 'version', keep feature cols
+
+    # BUGFIX: Reorder raw production/weather columns to match training column order BEFORE
+    # addDateTimeFeatures is called. The saved scaler (wFtMin/wFtMax) was built from training
+    # CSVs that had production forecasts first, then weather variables (wind_speed, temp, etc.).
+    # Runtime CSVs (from aggregateDataAndGenerateForecastFile) emit weather cols first, then
+    # production cols. Without this reorder, raw wind production (~414,000 kW) would be
+    # normalized with the wind_speed scaler (max=10), producing values of ~+47,000 that
+    # saturate all LSTM sigmoid/tanh gates and collapse 7-day forecasts into a flat diurnal repeat.
+    TRAINING_FEATURE_ORDER = [
+        "avg_biomass_production_forecast",
+        "avg_coal_production_forecast",
+        "avg_geothermal_production_forecast",
+        "avg_hydro_production_forecast",
+        "avg_nat_gas_production_forecast",
+        "avg_nuclear_production_forecast",
+        "avg_oil_production_forecast",
+        "avg_other_production_forecast",
+        "avg_solar_production_forecast",
+        "avg_wind_production_forecast",
+        "temp", "dpt", "dswrf", "wind_speed", "precip",
+    ]
+    available_cols = forecastDataset.columns.tolist()
+    ordered_cols = [c for c in TRAINING_FEATURE_ORDER if c in available_cols]
+    remaining_cols = [c for c in available_cols if c not in ordered_cols]
+    forecastDataset = forecastDataset[ordered_cols + remaining_cols]
+    print("forecastDataset columns (reordered to match training):", forecastDataset.columns.tolist())
+
     print("\nAdding features related to date & time...")
-    # Adding in weather dataset, as we need for 96 hours
-    forecastDataset = forecastDataset.iloc[:, 2:] # because we have added creation time & version for real-time
+    # Adding datetime features to weather dataset (prepends 5 cols: hour_sin/cos, month_sin/cos, weekend)
+    # This matches the wFtMin/wFtMax scaler layout: first 5 slots = datetime scalers (from ftMin/ftMax
+    # lines 0-1), then 14 slots = production/weather scalers (from wFtMin/wFtMax lines 2-3).
     modifiedForecastDataset = common.addDateTimeFeatures(forecastDataset, forecastDateTime, -1)
     forecastDataset = modifiedForecastDataset
     print(forecastDataset.head())
     print("Features related to date & time added")
-    
+
     for i in range(startCol, len(dataset.columns.values)):
         col = dataset.columns.values[i]
         dataset[col] = dataset[col].astype(np.float64)
@@ -458,10 +491,14 @@ def manipulateTrainingDataShape(data, trainWindowHours, labelWindowHours, weathe
         # define the end of the input sequence
         trainWindow = i + trainWindowHours
         labelWindow = trainWindow + labelWindowHours
+        if weatherData is not None:
+            wSlice = weatherData[weatherIdx:weatherIdx+trainWindowHours]
+            if len(wSlice) < trainWindowHours:
+                break
+            weatherX.append(wSlice)
         xInput = data[i:trainWindow, :]
         # xInput = xInput.reshape((len(xInput), 1))
         X.append(xInput)
-        weatherX.append(weatherData[weatherIdx:weatherIdx+trainWindowHours])
         weatherIdx +=1
         hourIdx +=1
         if(hourIdx ==24):
@@ -470,8 +507,9 @@ def manipulateTrainingDataShape(data, trainWindowHours, labelWindowHours, weathe
         y.append(data[trainWindow:labelWindow, DEPENDENT_VARIABLE_COL])
     X = np.array(X, dtype=np.float64)
     y = np.array(y, dtype=np.float64)
-    weatherX = np.array(weatherX, dtype=np.float64)
-    X = np.append(X, weatherX, axis=2)
+    if weatherData is not None and len(weatherX) > 0:
+        weatherX = np.array(weatherX, dtype=np.float64)
+        X = np.append(X, weatherX, axis=2)
     return X, y
 
 def manipulateTestDataShape(data, slidingWindowLen, predictionWindowHours, isDates=False): 

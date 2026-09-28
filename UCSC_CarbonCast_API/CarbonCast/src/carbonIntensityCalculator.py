@@ -89,33 +89,45 @@ def createHourlyTimeCol(dataset, datetime, startDate):
     return hourlyDateTime
 
 def calculateCarbonIntensity(dataset, carbonRate, numSources):
-    global CARBON_INTENSITY_COLUMN
-    carbonIntensity = 0
-    carbonCol = []
-    miniDataset = dataset.iloc[:, CARBON_INTENSITY_COLUMN:CARBON_INTENSITY_COLUMN+numSources]
-    print("**", miniDataset.columns.values)
+    # Instead of assuming a fixed column position, find every column whose
+    # name matches a known energy source (case-insensitive). This works
+    # regardless of how many sources a region has or what order they appear in.
+    source_cols = [c for c in dataset.columns if c.lower().strip() in carbonRate]
+
+    if not source_cols:
+        raise ValueError(
+            f"No recognized source columns found. "
+            f"Dataset columns: {list(dataset.columns)}. "
+            f"Known rate keys: {list(carbonRate.keys())}"
+        )
+
+    print("Source columns found:", source_cols)
+
+    miniDataset = dataset[source_cols].copy()
     rowSum = miniDataset.sum(axis=1).to_list()
+    carbonCol = []
+
     for i in range(len(miniDataset)):
-        if(rowSum[i] == 0):
-            # basic algorithm to fill missing values if all sources are missing
-            # just using the previous hour's value
-            # same as electricityMap
-            for j in range(1, len(dataset.columns.values)):
-                if(dataset.iloc[i, j] == 0):
-                    dataset.iloc[i, j] = dataset.iloc[i-1, j]
-                miniDataset.iloc[i] = dataset.iloc[i, CARBON_INTENSITY_COLUMN:CARBON_INTENSITY_COLUMN+numSources]
-                # print(miniDataset.iloc[i])
-            rowSum[i] = rowSum[i-1]
+        if rowSum[i] == 0:
+            # all sources zero this hour -> reuse previous hour's row values
+            for col in source_cols:
+                if dataset.loc[i, col] == 0 and i > 0:
+                    dataset.loc[i, col] = dataset.loc[i - 1, col]
+            miniDataset.loc[i] = dataset.loc[i, source_cols]
+            rowSum[i] = rowSum[i - 1] if i > 0 else 0
+
         carbonIntensity = 0
-        for j in range(len(miniDataset.columns.values)):
-            source = miniDataset.columns.values[j]
-            sourceContribFrac = miniDataset.iloc[i, j]/rowSum[i]
-            # print(sourceContribFrac, carbonRate[source])
-            carbonIntensity += (sourceContribFrac * carbonRate[source])
-        if (carbonIntensity == 0):
-            print(miniDataset.iloc[i])
-        carbonCol.append(round(carbonIntensity, 2)) # rounding to 2 values after decimal place
-    dataset.insert(loc=CARBON_INTENSITY_COLUMN, column="carbon_intensity", value=carbonCol)
+        for col in source_cols:
+            rate = carbonRate[col.lower().strip()]
+            if rowSum[i] > 0:
+                sourceContribFrac = miniDataset.loc[i, col] / rowSum[i]
+                carbonIntensity += sourceContribFrac * rate
+
+        carbonCol.append(round(carbonIntensity, 2))
+
+    # Always insert right after "UTC time" (position 1) — this is safe
+    # because "UTC time" is always column 0 in both eiaData and entsoeData files.
+    dataset.insert(loc=1, column="carbon_intensity", value=carbonCol)
     return dataset
 
 def calculateCarbonIntensityFromSourceForecasts(dataset, carbonRate, numSources):
@@ -264,7 +276,7 @@ def runProgram(region, isLifecycle, isForecast, realTimeInFileName, realTimeOutF
     else:
         print("Real time carbon intensities:")
         # dataset.set_index("UTC time")
-        dataset.to_csv(realTimeOutFileName)
+        dataset.to_csv(realTimeOutFileName, index=False)
     
     return
 
@@ -298,10 +310,19 @@ if __name__ == "__main__":
 
     region = sys.argv[1]
 
-    ISO_LIST = ["AECI", "AZPS", "BPAT", "CISO", "DUK", "EPE", "ERCO", "FPC", 
-                "FPL", "GRID", "IPCO", "ISNE", "LDWP", "MISO", "NEVP", "NWMT", "NYIS", 
-                "PACE", "PACW", "PJM", "PSCO", "PSEI", "SC", "SCEG", "SOCO", "SPA", "SRP", 
-                "SWPP", "TIDC", "TVA", "WACM", "WALC"]
+    ISO_LIST = [
+        # US regions
+        "AECI", #"AL",
+        "AZPS", "BANC", "BPAT", "CISO", "DOPD", "DUK", "EPE", "ERCO",
+        "FMPP", "FPC", "FPL", "GCPD", "GRID", "IPCO", "ISNE", "LDWP", "LGEE", "MISO",
+        "NEVP", "NWMT", "NYIS", "PACE", "PACW", "PGE", "PJM", "PNM", "PSCO", "PSEI",
+        "SC", "SCEG", "SCL", "SOCO", "SPA", "SRP", "SWPP", "TAL", "TEC", "TEPC",
+        "TIDC", "TPWR", "TVA", "WACM", "WALC",
+        # EU regions
+        "AT", "BE", "BG", "CH", "CZ", "DE", "DK", "EE", "ES", "FI",
+        "FR", "GR", "HR", "HU", "IE", "IT", "LT", "LV", "NL", #"GB"
+        "PL", "PT", "RO", "RS", "SE", "SI", "SK",
+    ]
 
     isForecast = False
     isLifecycle = False
@@ -326,9 +347,13 @@ if __name__ == "__main__":
                 CARBON_FROM_SRC_FORECASTS_OUT_FILE_NAME = "../data/"+region+"/"+region+"_carbon_from_src_prod_forecasts_lifecycle_"+TEST_PERIOD+".csv"
                 FORECAST_SRC_IN_FILE_NAME = "../data/"+region+"/"+region+"_96hr_source_prod_forecasts_DA_"+TEST_PERIOD+".csv"
             else:
-                # REAL_TIME_SRC_IN_FILE_NAME = "../data/"+region+"/"+region+".csv"
-                # CARBON_FROM_REAL_TIME_SRC_OUT_FILE_NAME = "../data/"+region+"/"+region+"_lifecycle_emissions.csv"
-                REAL_TIME_SRC_IN_FILE_NAME = "../data/"+region+"/"+region+"_clean.csv"
+                import os
+                if os.path.exists("eiaData/"+region+"_clean_mod.csv"):
+                    REAL_TIME_SRC_IN_FILE_NAME = "eiaData/"+region+"_clean_mod.csv"
+                elif os.path.exists("entsoeData/"+region+"_clean_mod.csv"):
+                    REAL_TIME_SRC_IN_FILE_NAME = "entsoeData/"+region+"_clean_mod.csv"
+                else:
+                    REAL_TIME_SRC_IN_FILE_NAME = "../data/"+region+"/"+region+"_clean.csv"
                 CARBON_FROM_REAL_TIME_SRC_OUT_FILE_NAME = "../data/"+region+"/"+region+"_lifecycle_emissions.csv"
         else:
             if (isForecast is True):
@@ -336,9 +361,13 @@ if __name__ == "__main__":
                 CARBON_FROM_SRC_FORECASTS_OUT_FILE_NAME = "../data/"+region+"/"+region+"_carbon_from_src_prod_forecasts_direct_"+TEST_PERIOD+".csv"
                 FORECAST_SRC_IN_FILE_NAME = "../data/"+region+"/"+region+"_96hr_source_prod_forecasts_DA_"+TEST_PERIOD+".csv"
             else:
-                # REAL_TIME_SRC_IN_FILE_NAME = "../data/"+region+"/"+region+".csv"
-                # CARBON_FROM_REAL_TIME_SRC_OUT_FILE_NAME = "../data/"+region+"/"+region+"_direct_emissions.csv"
-                REAL_TIME_SRC_IN_FILE_NAME = "../data/"+region+"/"+region+"_clean.csv"
+                import os
+                if os.path.exists("eiaData/"+region+"_clean_mod.csv"):
+                    REAL_TIME_SRC_IN_FILE_NAME = "eiaData/"+region+"_clean_mod.csv"
+                elif os.path.exists("entsoeData/"+region+"_clean_mod.csv"):
+                    REAL_TIME_SRC_IN_FILE_NAME = "entsoeData/"+region+"_clean_mod.csv"
+                else:
+                    REAL_TIME_SRC_IN_FILE_NAME = "../data/"+region+"/"+region+"_clean.csv"
                 CARBON_FROM_REAL_TIME_SRC_OUT_FILE_NAME = "../data/"+region+"/"+region+"_direct_emissions.csv"
 
         runProgram(region, isLifecycle, isForecast, REAL_TIME_SRC_IN_FILE_NAME, CARBON_FROM_REAL_TIME_SRC_OUT_FILE_NAME, 
