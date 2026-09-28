@@ -1,6 +1,6 @@
 # CarbonCast — Real-Time Integration Monorepo
 
-A system to predict the **hourly carbon intensity** of electricity for ~58 grid
+A system to predict the **hourly carbon intensity** of electricity for ~70 grid
 regions across the US and Europe using machine learning, and serve those
 forecasts through an API and an interactive web map.
 
