@@ -12,11 +12,11 @@ This repository is a **monorepo** that combines the three projects which togethe
 
 ```
 .
-├── CarbonCastUI/                  # (1) React web app — the interactive carbon-intensity map
-│   └── web/                       #     Vite + TypeScript + MapLibre frontend
+├── CarbonCastUI/                  # (1) Standalone React web app (MapLibre frontend)
+│   └── web/                       #     Note: Energy-wide UI lives in EnergyAPI/EnergyUI
 │
 ├── UCSC_CarbonCast_API/           # (2) Django REST API + ML forecasting pipeline
-│   └── CarbonCast/                #     Celery real-time ingestion & retraining, TensorFlow models
+│   └── CarbonCast/                #     Real-time inference, retraining, and HTTP API service
 │
 ├── UCSC_OSRE_CC_automation_tool/  # (3) RDA weather-download automation tool
 │   └── CarbonCast/                #     Fetches NCEP GFS weather from NCAR's Research Data Archive
@@ -25,23 +25,25 @@ This repository is a **monorepo** that combines the three projects which togethe
 └── HANDOFF.md                     # Start here — the big-picture guide
 ```
 
-How they connect: **(3) downloads weather → (2) turns it into forecasts and serves
-them over a REST API → (1) draws the map.** The three are loosely coupled and can
-be developed independently.
+How they connect: **(3) downloads weather → (2) turns it into forecasts and serves them over a REST API (port 8001) → (1) draws the map / upstream consumers (such as EnergyAPI on port 8000) ingest the forecasts.**
 
 ---
 
 ## Quick start
- 
-Each sub-project has its own README with canonical instructions. The fast paths to run and visualize the system locally:
+
+Each sub-project has its own README with canonical instructions. To run the backend service:
 
 ```bash
 # (1) Backend API (Django + PostgreSQL)
 cd UCSC_CarbonCast_API/CarbonCast/src/CarbonCastAPI
 DJANGO_SETTINGS_MODULE=CarbonCastAPI.settings \
-/Users/prarthanapatil/Documents/EnergyAPI11/CarbonCast/UCSC_CarbonCast_API/CarbonCast/.venv/bin/python manage.py runserver 8000
+/Users/prarthanapatil/Documents/EnergyAPI11/CarbonCast/UCSC_CarbonCast_API/CarbonCast/.venv/bin/python manage.py runserver 8001
+```
 
-# (2) Frontend Map UI (React + MapLibre)
+> **Port Convention**: When running alongside **EnergyAPI** (which serves on `http://localhost:8000`), CarbonCast typically runs on port **8001** (`http://localhost:8001`).
+
+```bash
+# (2) Standalone Frontend Map UI (React + MapLibre)
 cd CarbonCastUI/web && npm install && npm run dev
 # Open in browser: http://localhost:5173
 
@@ -49,7 +51,44 @@ cd CarbonCastUI/web && npm install && npm run dev
 cd UCSC_OSRE_CC_automation_tool/CarbonCast && pip install -r requirements.txt && pytest
 ```
 
-See [`HANDOFF.md`](HANDOFF.md), [`UCSC_CarbonCast_API/CarbonCast/DEVELOPER_GUIDE.md`](UCSC_CarbonCast_API/CarbonCast/DEVELOPER_GUIDE.md), and [`docs/`](docs/) for details.
+---
+
+## External Provider & On-Demand Reforecasting API
+
+CarbonCast functions as an independent carbon intensity and forecasting provider for downstream applications (such as [EnergyAPI](https://github.com/energyapi)).
+
+### Triggering Real-Time 168-Hour Reforecasts over HTTP
+
+External orchestrators can trigger an immediate, on-demand 168-hour ML reforecast for any balancing authority via HTTP `POST`:
+
+```bash
+curl -X POST "http://localhost:8001/v1/TriggerReforecast?region=DUK"
+```
+
+**Success Response (200 OK):**
+```json
+{
+  "status": "success",
+  "region": "DUK",
+  "message": "Real-time reforecast generated successfully.",
+  "generated_rows": 336,
+  "forecast_start": "2026-09-29T00:00:00Z",
+  "forecast_end": "2026-10-06T00:00:00Z"
+}
+```
+
+This invokes the complete real-time pipeline:
+1. Ingests the latest grid actuals (EIA / ENTSO-E / NESO).
+2. Downloads operational GFS 0.25° weather forecasts from NOAA NOMADS.
+3. Executes Tier 1 (ANN fuel mix) and Tier 2 (CNN-LSTM carbon intensity) ML inference.
+4. Stores the 336 forecast records (168 direct + 168 lifecycle) in PostgreSQL `CarbonCastRESTAPI_forecast168`.
+
+### Fetching Carbon Intensity Forecasts
+
+Downstream services fetch the generated forecast with:
+```bash
+curl -s "http://localhost:8001/v1/CarbonIntensityForecasts?regionCode=DUK&forecastPeriod=168h"
+```
 
 ---
 

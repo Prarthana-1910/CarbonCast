@@ -49,20 +49,25 @@ them over an API → (1) draws the pretty map.**
         │      - two-tier ML forecast (sources → carbon intensity)     │
         │      - weekly model retraining                               │
         │      - stores results in PostgreSQL                          │
-        │      - serves everything over a REST API                     │
+        │      - serves REST API (e.g., port 8001)                     │
+        │        * GET  /v1/CarbonIntensityForecasts                  │
+        │        * POST /v1/TriggerReforecast                         │
         └───────────────────────────┬─────────────────────────────────┘
-                                     │ HTTP/JSON  (e.g. /carboncastapi/v1/CarbonIntensity)
-                                     ▼
-        ┌────────────────────────────────────────────────────────────┐
-        │  (1) CarbonCastUI (React)                                    │
-        │      fetches data, caches it, paints the choropleth map      │
-        └────────────────────────────────────────────────────────────┘
+                                    │ HTTP/JSON
+                   ┌────────────────┴────────────────┐
+                   ▼                                 ▼
+        ┌────────────────────────────┐    ┌────────────────────────────┐
+        │ (1) CarbonCastUI (React)   │    │ External: EnergyAPI / UI   │
+        │     Standalone local map   │    │ Ingests CI forecasts into  │
+        │     for testing/research   │    │ multi-provider Energy DB   │
+        └────────────────────────────┘    └────────────────────────────┘
 ```
 
-The important thing to internalize: these are **loosely coupled**. The UI only
-knows the API's HTTP endpoints. The API only knows where weather files show up on
-disk. You can run and develop any one of them without the other two fully working
-(the API even falls back to CSV files when the database is empty).
+The important thing to internalize: these are **loosely coupled**.
+* The UI only knows the API's HTTP endpoints.
+* The API only knows where weather files show up on disk and provides standard HTTP endpoints (`/v1/CarbonIntensityForecasts`, `/v1/TriggerReforecast`).
+* External orchestrators like **EnergyAPI** can treat CarbonCast as an independent HTTP provider to trigger on-demand reforecasts and ingest 168-hour CI predictions.
+* You can run and develop any one of them without the other two fully working (the API even falls back to CSV files when the database is empty).
 
 ---
 
@@ -100,9 +105,9 @@ npm run dev          # opens a Vite dev server, usually http://localhost:5173
 ```bash
 cd UCSC_CarbonCast_API/CarbonCast/src/CarbonCastAPI
 DJANGO_SETTINGS_MODULE=CarbonCastAPI.settings \
-/Users/prarthanapatil/Documents/EnergyAPI11/CarbonCast/UCSC_CarbonCast_API/CarbonCast/.venv/bin/python manage.py runserver 8000
+/Users/prarthanapatil/Documents/EnergyAPI11/CarbonCast/UCSC_CarbonCast_API/CarbonCast/.venv/bin/python manage.py runserver 8001
 ```
-Running Django directly connects straight to your local PostgreSQL database containing the 168-hour ML forecasts. API docs (Swagger) are exposed at `http://localhost:8000/doc/`.
+Running Django connects straight to your local PostgreSQL database containing the 168-hour ML forecasts. API docs (Swagger) are exposed at `http://localhost:8001/doc/` (or `8000/doc/` if running standalone). Use port 8001 when co-running with EnergyAPI (port 8000).
 
 ### 3. Automation tool
 ```bash

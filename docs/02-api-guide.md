@@ -131,6 +131,7 @@ returns every supported US region. From `urls.py`:
 | GET | `SupportedRegions` | List of supported region codes. |
 | GET | `DataFreshness` | How fresh the data is per region (drives the UI's freshness indicator). |
 | GET | `RetrainingStatus` | Status of model retraining runs. |
+| POST | `TriggerReforecast` | Triggers real-time ML reforecast on-demand for a region (`?region=<code>`). Generates and persists 168h forecast (336 rows). |
 | —   | `UserAuthenticationEnforced` | Auth-gated probe endpoint. |
 | POST | `SignUp` / `SignIn` / `Logout` | Auth flows. |
 | POST | `VerifyOTP` | TOTP/2FA verification. |
