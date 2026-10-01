@@ -335,4 +335,6 @@ if __name__ == "__main__":
     parser.add_argument("--regions", nargs="+", default=None, help="Specific regions to run, or defaults to all 68.")
     args = parser.parse_args()
 
-    run_batch(regions=args.regions)
+    res = run_batch(regions=args.regions)
+    if res.get('failed') and not res.get('success'):
+        sys.exit(1)

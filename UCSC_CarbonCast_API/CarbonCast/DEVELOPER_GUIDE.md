@@ -53,8 +53,33 @@ This document is the comprehensive, implementation-grounded developer guide for 
 
 ## 1.2 Running Inference
 
-### Single Region Command
-To run real-time inference for a single balancing authority (e.g., `CISO` or `GB`):
+### Option A: Via HTTP API (Recommended for External Orchestration / EnergyAPI)
+When CarbonCast is running as an HTTP service (e.g., on port 8001), any external orchestrator or client can trigger real-time inference on-demand via a `POST` request:
+
+```bash
+curl -X POST "http://localhost:8001/v1/TriggerReforecast?region=CISO"
+```
+
+**JSON Response (200 OK):**
+```json
+{
+  "status": "success",
+  "region": "CISO",
+  "message": "Real-time reforecast generated successfully.",
+  "generated_rows": 336,
+  "forecast_start": "2026-09-29T00:00:00Z",
+  "forecast_end": "2026-10-06T00:00:00Z"
+}
+```
+
+The endpoint triggers `run_pipeline(region)` synchronously:
+1. Ingests latest generation actuals from EIA / ENTSO-E.
+2. Pulls live GFS 0.25° weather from NOAA NOMADS.
+3. Performs Tier 1 ANN generation forecasting + Tier 2 CNN-LSTM carbon intensity forecasting.
+4. Saves 336 hourly rows (168 direct + 168 lifecycle) to PostgreSQL table `CarbonCastRESTAPI_forecast168`.
+
+### Option B: Single Region Python Command
+To run real-time inference directly in the local environment:
 
 ```bash
 cd /Users/prarthanapatil/Documents/EnergyAPI11/CarbonCast/UCSC_CarbonCast_API/CarbonCast/src/CarbonCastAPI
@@ -73,7 +98,7 @@ Or via direct script invocation:
   --regions CISO
 ```
 
-### Batch Inference Command
+### Option C: Batch Inference Command
 To run inference across all active regions:
 
 ```bash
@@ -272,29 +297,42 @@ HAVING STDDEV(value) = 0 OR STDDEV(value) IS NULL OR MIN(value) = MAX(value);
 
 ## 1.8 Visualizing Results: Running Backend API & Frontend Map UI
 
-To interactively explore and visualize the 168-hour forecasts, actuals, and regional carbon intensities on the interactive world map:
+To interactively explore and visualize the 168-hour forecasts, actuals, and regional carbon intensities:
 
 ### Terminal 1: Start the Backend API (Direct Python / PostgreSQL)
 ```bash
 cd /Users/prarthanapatil/Documents/EnergyAPI11/CarbonCast/UCSC_CarbonCast_API/CarbonCast/src/CarbonCastAPI
 DJANGO_SETTINGS_MODULE=CarbonCastAPI.settings \
-/Users/prarthanapatil/Documents/EnergyAPI11/CarbonCast/UCSC_CarbonCast_API/CarbonCast/.venv/bin/python manage.py runserver 8000
+/Users/prarthanapatil/Documents/EnergyAPI11/CarbonCast/UCSC_CarbonCast_API/CarbonCast/.venv/bin/python manage.py runserver 8001
 ```
-* **Swagger API Docs:** [http://localhost:8000/doc/](http://localhost:8000/doc/)
-* **Test 168h Forecast Endpoint:** [http://localhost:8000/v1/CarbonIntensityForecasts?regionCode=CISO&forecastPeriod=168h](http://localhost:8000/v1/CarbonIntensityForecasts?regionCode=CISO&forecastPeriod=168h)
 
 > [!NOTE]
-> Running the Django backend directly with Python connects straight to your local PostgreSQL database (`carboncast`), which holds the full 168-hour ML forecasts and historical grid data.
+> * **Port Convention:** By default, Django serves on port 8000. When co-located with **EnergyAPI** (which serves on `http://localhost:8000`), run CarbonCast on port **8001** (`manage.py runserver 8001`).
+> * Running the Django backend directly with Python connects straight to your local PostgreSQL database (`carboncast`), which holds the full 168-hour ML forecasts and historical grid data.
 
-### Terminal 2: Start the Frontend UI Map (React + MapLibre)
+* **Swagger API Docs:** [http://localhost:8001/doc/](http://localhost:8001/doc/)
+* **Test 168h Forecast Endpoint:** [http://localhost:8001/v1/CarbonIntensityForecasts?regionCode=CISO&forecastPeriod=168h](http://localhost:8001/v1/CarbonIntensityForecasts?regionCode=CISO&forecastPeriod=168h)
+* **Trigger Reforecast Endpoint:** [http://localhost:8001/v1/TriggerReforecast?region=CISO](http://localhost:8001/v1/TriggerReforecast?region=CISO)
+
+### Terminal 2: Frontend Visualization Options
+
+#### Option A: Energy UI (Integrated Energy Ecosystem)
+The production energy dashboard lives in the `energyapi` repository (`energyapi/EnergyUI`). It connects directly to EnergyAPI (port 8000) and visualizes regional carbon intensity data synced from CarbonCast and other providers:
+```bash
+cd /Users/prarthanapatil/energyapi/EnergyUI
+npm run dev
+# Dashboard URL: http://localhost:5173 (or 5174)
+```
+
+#### Option B: Standalone CarbonCast Map UI (React + MapLibre)
+To test CarbonCast directly with its standalone React map interface:
 ```bash
 cd /Users/prarthanapatil/Documents/EnergyAPI11/CarbonCast/CarbonCastUI/web
 npm install   # (only needed on initial setup)
 npm run dev
 ```
 * **Interactive Map URL:** [http://localhost:5173](http://localhost:5173)
-
-Ensure `CarbonCastUI/web/.env` contains `VITE_API_BASE_URL=http://localhost:8000` so the React frontend queries the local API server. Once running, you can click any region on the map to view the 168-hour forecast timeline and carbon intensity metrics.
+* Ensure `CarbonCastUI/web/.env` contains `VITE_API_BASE_URL=http://localhost:8001` (or `8000`) so the React frontend queries the CarbonCast API server. Click any region on the map to view the 168-hour forecast timeline and carbon intensity metrics.
 
 ---
 

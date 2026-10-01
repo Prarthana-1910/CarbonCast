@@ -47,3 +47,42 @@ class RetrainingStatusApiView(APIView):
             'retraining_status': rows,
             'carbon_cast_version': carbon_cast_version,
         })
+
+
+class TriggerReforecastApiView(APIView):
+    """
+    HTTP endpoint to trigger an on-demand real-time reforecast for a given region.
+    Powers external API orchestrators like EnergyAPI.
+    """
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        region = request.query_params.get('region') or (request.data.get('region') if hasattr(request, 'data') else None)
+        if not region:
+            return Response(
+                {"status": "error", "message": "Missing required 'region' parameter"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        region = region.strip().upper()
+        try:
+            from CarbonCastRESTAPI.services.weather_fetch.run_full_realtime_pipeline import run_pipeline
+            from CarbonCastRESTAPI.models import Forecast168
+            
+            run_pipeline(region)
+            count = Forecast168.objects.filter(region_code=region).count()
+            return Response({
+                "status": "success",
+                "region": region,
+                "message": f"Real-time pipeline completed successfully for {region}",
+                "forecast_rows": count,
+                "carbon_cast_version": carbon_cast_version
+            }, status=status.HTTP_200_OK)
+        except Exception as exc:
+            return Response({
+                "status": "error",
+                "region": region,
+                "message": str(exc),
+                "carbon_cast_version": carbon_cast_version
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

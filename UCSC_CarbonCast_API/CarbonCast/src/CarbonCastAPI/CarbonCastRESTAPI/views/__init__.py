@@ -22,7 +22,7 @@ from .regions import (
     SupportedRegionsApiView,
     DataFreshnessApiView,
 )
-from .retraining import RetrainingStatusApiView
+from .retraining import RetrainingStatusApiView, TriggerReforecastApiView
 from .validation import ForecastValidationApiView
 from .auth import (
     UserAuthenticationEnforcedView,
@@ -44,6 +44,7 @@ __all__ = [
     "SupportedRegionsApiView",
     "DataFreshnessApiView",
     "RetrainingStatusApiView",
+    "TriggerReforecastApiView",
     "ForecastValidationApiView",
     "UserAuthenticationEnforcedView",
     "LogoutAPIView",

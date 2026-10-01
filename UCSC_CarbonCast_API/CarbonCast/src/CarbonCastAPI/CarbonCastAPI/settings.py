@@ -110,21 +110,27 @@ PASSWORD_HASHERS = [
 ]
 
 # Database
-DATABASE_URL = os.environ.get('DATABASE_URL')
+DATABASE_URL = os.environ.get('CARBONCAST_DATABASE_URL') or os.environ.get('DATABASE_URL')
+# If DATABASE_URL is set for a different service (e.g., energyapi), ignore it in local dev
+if DATABASE_URL and 'energyapi' in DATABASE_URL:
+    DATABASE_URL = None
+
 if DATABASE_URL:
+    ssl_require = os.environ.get('DB_SSL_REQUIRE', 'False').lower() in ('true', '1')
     try:
         import dj_database_url
         DATABASES = {
             'default': dj_database_url.config(
                 default=DATABASE_URL,
                 conn_max_age=600,
-                ssl_require=True,
+                ssl_require=ssl_require,
                 engine='django.db.backends.postgresql'
             )
         }
     except ImportError:
         import urllib.parse as urlparse
         url = urlparse.urlparse(DATABASE_URL)
+        options = {'sslmode': 'require'} if ssl_require else {}
         DATABASES = {
             'default': {
                 'ENGINE': 'django.db.backends.postgresql',
@@ -133,7 +139,7 @@ if DATABASE_URL:
                 'PASSWORD': url.password,
                 'HOST': url.hostname,
                 'PORT': url.port or '5432',
-                'OPTIONS': {'sslmode': 'require'},
+                'OPTIONS': options,
             }
         }
 else:
